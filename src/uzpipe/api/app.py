@@ -1,12 +1,4 @@
-"""
-uzpipe.api.app
-================
-
-HTML dashboard va tashqi klientlar uchun yupqa FastAPI qatlami.
-
-Faqat fundament chaqiruvlarini ochadi:
-  - registry, ControlStore, RunStore, scheduler, run_pipeline_by_name
-"""
+"""uzpipe.api.app — FastAPI: registry, ControlStore, RunStore, scheduler, demo."""
 
 from __future__ import annotations
 
@@ -47,10 +39,7 @@ register_builtin_connectors()
 
 app = FastAPI(title="UzPipe", version="0.1.0", docs_url="/api/docs")
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
 _STATIC = Path(__file__).resolve().parents[3] / "static"
@@ -94,6 +83,9 @@ class RunResponse(BaseModel):
     row_counts: dict[str, int]
     quality_passed: bool
     quality_details: list[dict[str, Any]]
+    duration_seconds: float = 0.0
+    total_rows: int = 0
+    rows_per_second: float = 0.0
 
 
 @app.get("/")
@@ -107,14 +99,13 @@ def index() -> FileResponse:
 @app.get("/api/health")
 def health() -> dict[str, object]:
     sched = scheduler_status()
-    stats = _runs().stats()
     return {
         "status": "ok",
         "service": "uzpipe",
         "version": "0.1.0",
         "scheduler_running": sched.get("running", False),
         "scheduler_jobs": sched.get("job_count", 0),
-        "runs": stats,
+        "runs": _runs().stats(),
     }
 
 
@@ -125,7 +116,7 @@ def list_destinations() -> list[dict[str, Any]]:
 
 @app.get("/api/connectors")
 def list_connectors() -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
+    out = []
     for m in registry.all_manifests():
         out.append(
             {
@@ -141,7 +132,30 @@ def list_connectors() -> list[dict[str, Any]]:
 
 @app.get("/api/pipelines")
 def list_pipelines() -> list[dict[str, Any]]:
-    return _store().list_all()
+    items = _store().list_all()
+    runs = _runs()
+    out = []
+    for item in items:
+        recent = runs.list_recent(limit=1, pipeline_name=item["name"])
+        last = recent[0] if recent else None
+        item = dict(item)
+        item["last_run"] = (
+            {
+                "success": last["success"],
+                "quality_passed": last["quality_passed"],
+                "finished_at": last["finished_at"],
+                "trigger": last["trigger"],
+                "row_counts": last["row_counts"],
+                "error": last.get("error"),
+                "duration_seconds": last.get("duration_seconds", 0),
+                "total_rows": last.get("total_rows", 0),
+                "rows_per_second": last.get("rows_per_second", 0),
+            }
+            if last
+            else None
+        )
+        out.append(item)
+    return out
 
 
 @app.get("/api/pipelines/{name}")
@@ -177,18 +191,13 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
     for k in secret_keys:
         secrets.setdefault(k, "")
 
-    combined = {**params, **secrets}
-    errors = manifest.validate_values(combined)
+    errors = manifest.validate_values({**params, **secrets})
     if errors:
         raise HTTPException(422, {"validation_errors": errors})
 
     dest_spec = get_destination(body.destination.connector)
     if dest_spec is None:
-        raise HTTPException(
-            400,
-            f"Noma'lum destination: {body.destination.connector}. "
-            f"Mavjud: {[d['key'] for d in all_destinations()]}",
-        )
+        raise HTTPException(400, f"Noma'lum destination: {body.destination.connector}")
     if dest_spec.needs_connection and not (body.destination.connection or "").strip():
         raise HTTPException(422, f"{dest_spec.label} uchun connection majburiy")
 
@@ -235,10 +244,7 @@ def run_pipeline(name: str) -> RunResponse:
     except Exception as e:
         raise HTTPException(500, f"Run xatosi: {e}") from e
 
-    details = [
-        {"passed": o.passed, "detail": o.detail}
-        for o in result.quality_report.outcomes
-    ]
+    details = [{"passed": o.passed, "detail": o.detail} for o in result.quality_report.outcomes]
     try:
         _runs().record(
             pipeline_name=result.pipeline_name,
@@ -247,6 +253,9 @@ def run_pipeline(name: str) -> RunResponse:
             row_counts=result.row_counts,
             quality_details=details,
             trigger="manual",
+            duration_seconds=result.duration_seconds,
+            total_rows=result.total_rows,
+            rows_per_second=result.rows_per_second,
         )
     except Exception:
         pass
@@ -256,7 +265,56 @@ def run_pipeline(name: str) -> RunResponse:
         row_counts=result.row_counts,
         quality_passed=result.quality_report.all_passed,
         quality_details=details,
+        duration_seconds=result.duration_seconds,
+        total_rows=result.total_rows,
+        rows_per_second=round(result.rows_per_second, 1),
     )
+
+
+@app.post("/api/demo/volume")
+def demo_volume(row_count: int = 100000) -> dict[str, Any]:
+    """1-click volume demo: synthetic → DuckDB."""
+    register_builtin_connectors()
+    row_count = max(1000, min(int(row_count), 1_000_000))
+    name = "demo_volume"
+    manifest = registry.get_manifest("synthetic_volume")
+    duck_path = str(Path("/tmp") / "uzpipe_volume_demo.duckdb")
+    config = PipelineConfig(
+        name=name,
+        connector_key="synthetic_volume",
+        source_params={"row_count": str(row_count), "batch_label": "wow"},
+        destination=DestinationConfig(
+            connector="duckdb", connection=duck_path, dataset_name="demo"
+        ),
+        write_disposition=WriteDisposition.REPLACE,
+    )
+    _store().save(config, {}, manifest)
+    result = run_pipeline_by_name(name, store=_store())
+    details = [{"passed": o.passed, "detail": o.detail} for o in result.quality_report.outcomes]
+    try:
+        _runs().record(
+            pipeline_name=result.pipeline_name,
+            success=result.success,
+            quality_passed=result.quality_report.all_passed,
+            row_counts=result.row_counts,
+            quality_details=details,
+            trigger="demo",
+            duration_seconds=result.duration_seconds,
+            total_rows=result.total_rows,
+            rows_per_second=result.rows_per_second,
+        )
+    except Exception:
+        pass
+    return {
+        "pipeline_name": result.pipeline_name,
+        "success": result.success,
+        "row_counts": result.row_counts,
+        "total_rows": result.total_rows,
+        "duration_seconds": result.duration_seconds,
+        "rows_per_second": round(result.rows_per_second, 1),
+        "destination": duck_path,
+        "quality_passed": result.quality_report.all_passed,
+    }
 
 
 @app.get("/api/runs")
