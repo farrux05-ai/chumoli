@@ -1,18 +1,20 @@
-# Status (MVP v1)
+# Status (MVP v1 — production-ready core)
 
 **Last verified:** 2026-09-18
 
 ## Tests
-- pytest (sql + rest e2e, UZ connectors unit, destinations, CLI, quality)
+- **53 passed**
 
-## v1 scope (solid)
-- **Connectors:** PostgreSQL, MySQL, REST API, SQL Database (generic)
-- **UZ payments:** Click, Payme, Uzum Market
-- **Destinations:** DuckDB, PostgreSQL, Filesystem/S3, ClickHouse
-- Secrets encrypted (source + destination)
-- FastAPI + HTML dashboard
+## v1 (prod core)
+- Connectors: PostgreSQL, MySQL, REST API, SQL Database
+- UZ payments: **Click**, **Payme**, **Uzum Market**
+- Destinations: DuckDB, PostgreSQL, Filesystem/S3, ClickHouse
+- Secrets encrypted (source + destination connection)
+- **Run monitor** (`RunStore` + dashboard Runs)
+- **Scheduler** (APScheduler interval jobs, auto-start on API boot)
+- FastAPI + HTML dashboard (Pipelines / Runs / Connectors / Scheduler)
 
-## Not in v1
+## Not yet
 - 1C, Didox, Soliq
-- API monitor → GitHub issues
-- Scheduler / notify
+- API contract monitor → GitHub issues
+- Telegram notify
