@@ -2,47 +2,81 @@
 
 Lightweight EL tool for Uzbekistan data sources, built on [dlt](https://dlthub.com) (Apache 2.0).
 
-## Quick start
+Dashboard + FastAPI + connectors (SQL, REST, Click, Payme, Uzum) + volume demo.
+
+---
+
+## Option A — Docker (recommended)
+
+**Requirements:** Docker + Docker Compose v2
 
 ```bash
-pip install -e ".[dev]"
-PYTHONPATH=src python -m uzpipe.api.app
+git clone https://github.com/farrux05-ai/uzpipe.git
+cd uzpipe
+docker compose up --build
+```
+
+Open **http://localhost:8000/**
+
+- Data (pipelines, secrets, run history) → Docker volume `uzpipe_data`
+- Stop: `Ctrl+C` or `docker compose down`
+- Logs: `docker compose logs -f`
+
+### Volume demo (speed)
+
+In the UI click **⚡ Volume demo**, or:
+
+```bash
+curl -X POST "http://localhost:8000/api/demo/volume?row_count=100000"
+```
+
+Response includes `total_rows`, `duration_seconds`, `rows_per_second`.
+
+---
+
+## Option B — Local Python
+
+**Requirements:** Python 3.11+
+
+```bash
+git clone https://github.com/farrux05-ai/uzpipe.git
+cd uzpipe
+
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+
+pip install -U pip
+pip install -r requirements.txt
+pip install -e .
+
+uzpipe-api
+# or: python -m uvicorn uzpipe.api.app:app --host 127.0.0.1 --port 8000
 ```
 
 Open **http://127.0.0.1:8000/**
 
-Docker:
+Data dir: `~/.uzpipe` (override with `UZPIPE_HOME=/path`).
+
+### Tests
 
 ```bash
-docker compose up --build
+pip install -e ".[dev]"
+pytest -q
 ```
 
-## v1 features
+---
+
+## Features (v1)
 
 | Area | Status |
 |------|--------|
-| SQL (Postgres / MySQL / generic) | ✅ |
-| REST API | ✅ |
+| PostgreSQL / MySQL / SQL / REST | ✅ |
 | Click / Payme / Uzum Market | ✅ |
-| Destinations (DuckDB, Postgres, FS, ClickHouse) | ✅ |
-| Run monitor + last status | ✅ |
+| Volume demo (synthetic) | ✅ |
+| DuckDB / Postgres / FS / ClickHouse destinations | ✅ |
+| Run monitor + duration / rows/s | ✅ |
 | Interval scheduler | ✅ |
 | Encrypted secrets | ✅ |
 | Docker | ✅ |
-
-## Tests
-
-```bash
-PYTHONPATH=src python -m pytest tests/ -v
-# 53 passed
-```
-
-## Architecture
-
-```
-Dashboard → FastAPI → ControlStore + RunStore + Scheduler → dlt
-```
-
-Data dir: `~/.uzpipe` or `$UZPIPE_HOME`.
 
 License: Apache-2.0
