@@ -2,31 +2,25 @@
 uzpipe.connectors.sql_database.connector
 ===========================================
 
-dlt'ning tayyor `sql_database` source'i ustidagi yupqa adapter.
+dlt'ning tayyor `sql_database` source'i ustidagi yupqa adapterlar.
 
-NEGA `table_names` VERGUL BILAN AJRATILGAN BITTA MATN MAYDONI,
-RO'YXAT (multi-select) EMAS
---------------------------------------------------------------------
-Manifest tizimida `FieldType.SELECT` bor, lekin u FAQAT oldindan
-ma'lum variantlar uchun ishlaydi (masalan auth turi). Jadval nomlari
-esa foydalanuvchining o'z bazasiga bog'liq — ular oldindan noma'lum,
-va ularni bilish uchun avval bazaga ulanish kerak bo'lardi (formaga
-"live" so'rov). Bu MVP darajasida ortiqcha murakkablik: oddiy matn
-maydoni ("orders, customers, payments") ancha sodda, va dlt buni
-o'zi vergul bo'yicha bo'lib, har biri uchun alohida resource yaratadi.
-Kelajakda, agar kerak bo'lsa, "ulanishni tekshirish va jadvallar
-ro'yxatini ko'rsatish" alohida, ixtiyoriy UI qadamiga aylanishi
-mumkin — bu ANIQ shu connector faylini o'zgartirishni talab qilmaydi,
-chunki forma darajasidagi funksionallik.
+Strategiya (docs/strategy/uzpipe-connector-strategy.md):
+  - Ichki dlt source bir xil: `sql_database`
+  - Foydalanuvchi UI da alohida kartochkalar ko'radi:
+      PostgreSQL, MySQL, SQL Database (generic)
+  - Bu "sifat > son" va "user-facing names" qoidalariga mos.
 
-NEGA INCREMENTAL SOZLAMASI (cursor_field) MANIFESTDA IXTIYORIY
---------------------------------------------------------------------
-ROADMAP.md incremental yuklashni "Cursor column-based" deb belgilagan.
-Bu yerda `cursor_column` maydoni required=False qilingan: agar
-foydalanuvchi bo'sh qoldirsa, dlt to'liq (full refresh) rejimda
-ishlaydi. Buni majburiy qilish "birinchi ulanish" tajribasini
-og'irlashtirar edi — foydalanuvchi avval jadvalni ko'rishni, keyin
-incremental sozlashni xohlashi mumkin.
+NEGA UCHTA ALOHIDA MANIFEST, BITTA build MANTIG'I
+----------------------------------------------------
+PostgreSQL va MySQL uchun placeholder, help matni va label farq
+qiladi — forma tajribasi yaxshilanadi. Lekin `build_dlt_source`
+100% bir xil (SQLAlchemy connection string). Shuning uchun
+umumiy `_build_sql_database_source` yordamchi funksiyasi bor;
+har bir connector klassi faqat o'z `manifest`ini olib yuradi.
+
+Generic `sql_database` SQLite / MSSQL / Oracle va testlar uchun
+qoldirilgan — katalogni "to'ldirish" uchun emas, balki haqiqiy
+ehtiyoj (masalan lokal SQLite dump) uchun.
 """
 
 from __future__ import annotations
@@ -35,27 +29,23 @@ from typing import Any
 
 from dlt.sources.sql_database import sql_database
 
-from uzpipe.connectors.base import BaseUZConnector
 from uzpipe.core.manifest import ConnectorCategory, ConnectorManifest, FieldSpec, FieldType
 
-MANIFEST = ConnectorManifest(
-    key="sql_database",
-    label="SQL Database",
-    category=ConnectorCategory.UNIVERSAL,
-    description="PostgreSQL, MySQL, MSSQL, SQLite, Oracle (dlt built-in)",
-    dlt_source_factory="uzpipe.connectors.sql_database.connector.SqlDatabaseConnector",
-    fields=[
+
+def _sql_fields(
+    *,
+    connection_placeholder: str,
+    connection_help: str,
+) -> list[FieldSpec]:
+    return [
         FieldSpec(
             key="connection_string",
             label="Connection string",
             type=FieldType.PASSWORD,
             required=True,
             secret=True,
-            placeholder="postgresql://user:pass@host:5432/db",
-            help_text=(
-                "Connection string maxfiy deb belgilangan, chunki odatda "
-                "login/parol o'zida saqlaydi"
-            ),
+            placeholder=connection_placeholder,
+            help_text=connection_help,
         ),
         FieldSpec(
             key="table_names",
@@ -73,34 +63,117 @@ MANIFEST = ConnectorManifest(
             placeholder="updated_at",
             help_text="Bo'sh qoldirilsa, har safar to'liq yuklanadi",
         ),
-    ],
+    ]
+
+
+def _build_sql_database_source(
+    params: dict[str, Any], secrets: dict[str, str]
+) -> Any:
+    """Barcha SQL connectorlar uchun yagona dlt chaqiruvi."""
+    table_names = [t.strip() for t in params["table_names"].split(",") if t.strip()]
+    cursor_column = params.get("cursor_column") or None
+
+    kwargs: dict[str, Any] = {
+        "credentials": secrets["connection_string"],
+        "table_names": table_names,
+    }
+    if cursor_column:
+        # dlt incremental source-level: barcha jadvallar bir xil
+        # cursor ustunini ishlatadi. Farqli cursor kerak bo'lsa —
+        # alohida pipeline.
+        import dlt
+
+        kwargs["incremental"] = dlt.sources.incremental(cursor_column)
+
+    return sql_database(**kwargs)
+
+
+# ---------------------------------------------------------------------------
+# PostgreSQL — asosiy UZ/app DB kartochkasi
+# ---------------------------------------------------------------------------
+
+POSTGRESQL_MANIFEST = ConnectorManifest(
+    key="postgresql",
+    label="PostgreSQL",
+    category=ConnectorCategory.UNIVERSAL,
+    description="App DB yoki warehouse → DuckDB / boshqa destination",
+    dlt_source_factory="uzpipe.connectors.sql_database.connector.PostgreSQLConnector",
+    fields=_sql_fields(
+        connection_placeholder="postgresql://user:pass@host:5432/dbname",
+        connection_help=(
+            "SQLAlchemy format. Parol connection string ichida — "
+            "maxfiy saqlanadi (Fernet)."
+        ),
+    ),
+)
+
+
+class PostgreSQLConnector:
+    """PostgreSQL uchun thin adapter (dlt sql_database)."""
+
+    manifest = POSTGRESQL_MANIFEST
+
+    def build_dlt_source(self, params: dict[str, Any], secrets: dict[str, str]) -> Any:
+        return _build_sql_database_source(params, secrets)
+
+
+# ---------------------------------------------------------------------------
+# MySQL / MariaDB
+# ---------------------------------------------------------------------------
+
+MYSQL_MANIFEST = ConnectorManifest(
+    key="mysql",
+    label="MySQL",
+    category=ConnectorCategory.UNIVERSAL,
+    description="MySQL yoki MariaDB (SQLAlchemy / pymysql)",
+    dlt_source_factory="uzpipe.connectors.sql_database.connector.MySQLConnector",
+    fields=_sql_fields(
+        connection_placeholder="mysql+pymysql://user:pass@host:3306/dbname",
+        connection_help=(
+            "MySQL uchun odatda mysql+pymysql:// ... format ishlatiladi. "
+            "Parol maxfiy saqlanadi."
+        ),
+    ),
+)
+
+
+class MySQLConnector:
+    """MySQL / MariaDB uchun thin adapter (dlt sql_database)."""
+
+    manifest = MYSQL_MANIFEST
+
+    def build_dlt_source(self, params: dict[str, Any], secrets: dict[str, str]) -> Any:
+        return _build_sql_database_source(params, secrets)
+
+
+# ---------------------------------------------------------------------------
+# Generic SQL Database — SQLite, MSSQL, Oracle va testlar
+# ---------------------------------------------------------------------------
+
+SQL_DATABASE_MANIFEST = ConnectorManifest(
+    key="sql_database",
+    label="SQL Database",
+    category=ConnectorCategory.UNIVERSAL,
+    description="SQLite, MSSQL, Oracle va boshqa SQLAlchemy URL'lar",
+    dlt_source_factory="uzpipe.connectors.sql_database.connector.SqlDatabaseConnector",
+    fields=_sql_fields(
+        connection_placeholder="sqlite:///path/to/db.sqlite",
+        connection_help=(
+            "Istalgan SQLAlchemy connection string. "
+            "PostgreSQL/MySQL uchun alohida kartochkalarni afzal ko'ring."
+        ),
+    ),
 )
 
 
 class SqlDatabaseConnector:
-    """`BaseUZConnector` protocol'iga mos, dlt'ning sql_database source'ini chaqiruvchi adapter."""
+    """Generic SQL adapter — testlar va kam uchraydigan dialectlar uchun."""
 
-    manifest = MANIFEST
+    manifest = SQL_DATABASE_MANIFEST
 
     def build_dlt_source(self, params: dict[str, Any], secrets: dict[str, str]) -> Any:
-        table_names = [t.strip() for t in params["table_names"].split(",") if t.strip()]
-        cursor_column = params.get("cursor_column") or None
+        return _build_sql_database_source(params, secrets)
 
-        kwargs: dict[str, Any] = {
-            "credentials": secrets["connection_string"],
-            "table_names": table_names,
-        }
-        if cursor_column:
-            # dlt'ning incremental parametri table-level emas,
-            # source-level bo'lgani uchun bu yerda barcha tanlangan
-            # jadvallar BIR XIL cursor ustunini ishlatadi deb
-            # taxmin qilinadi. Agar jadvallarning cursor ustunlari
-            # farqli bo'lsa, foydalanuvchi hozircha ularni ALOHIDA
-            # pipeline sifatida qo'shishi kerak — bu chegara ataylab
-            # hujjatlashtirilgan, chunki "har jadval uchun alohida
-            # cursor maydoni" formani sezilarli murakkablashtirar edi.
-            import dlt
 
-            kwargs["incremental"] = dlt.sources.incremental(cursor_column)
-
-        return sql_database(**kwargs)
+# Orqa-moslik: eski importlar MANIFEST ni kutishi mumkin
+MANIFEST = SQL_DATABASE_MANIFEST
