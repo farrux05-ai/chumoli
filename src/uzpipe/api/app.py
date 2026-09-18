@@ -42,9 +42,24 @@ app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
-_STATIC = Path(__file__).resolve().parents[3] / "static"
+
+def _static_dir() -> Path:
+    """Resolve static/ for Docker (/app/static), repo checkout, or cwd."""
+    candidates = [
+        Path("/app/static"),
+        Path(__file__).resolve().parents[3] / "static",
+        Path(__file__).resolve().parents[2] / "static",
+        Path.cwd() / "static",
+    ]
+    for p in candidates:
+        if p.is_dir() and (p / "index.html").is_file():
+            return p
+    return candidates[0]
+
+
+_STATIC = _static_dir()
 if _STATIC.is_dir():
-    app.mount("/assets", StaticFiles(directory=_STATIC), name="assets")
+    app.mount("/assets", StaticFiles(directory=str(_STATIC)), name="assets")
 
 
 @app.on_event("startup")
