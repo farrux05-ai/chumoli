@@ -22,6 +22,7 @@ def register_builtin_connectors() -> None:
         SqlDatabaseConnector,
     )
     from uzpipe.connectors.uzum_market.connector import UzumMarketConnector
+    from uzpipe.connectors.synthetic_volume.connector import SyntheticVolumeConnector
 
     already_registered = {m.key for m in registry.all_manifests()}
 
@@ -33,6 +34,7 @@ def register_builtin_connectors() -> None:
         ("click_uz", ClickConnector),
         ("payme_uz", PaymeConnector),
         ("uzum_market", UzumMarketConnector),
+        ("synthetic_volume", SyntheticVolumeConnector),
     ]
     for key, cls in builtins:
         if key not in already_registered:
