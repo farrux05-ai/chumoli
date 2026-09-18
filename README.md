@@ -17,7 +17,7 @@ Open: **http://127.0.0.1:8000/**
 
 ### What works now
 
-- Connectors: **REST API**, **SQL Database** (dlt core wrappers)
+- Connectors: **PostgreSQL**, **MySQL**, **REST API**, **SQL Database** (generic)
 - Create pipeline from UI (manifest-driven form)
 - Run → real dlt load to **DuckDB**
 - Secrets encrypted in local ControlStore (`~/.uzpipe/`)
@@ -28,7 +28,7 @@ Open: **http://127.0.0.1:8000/**
 
 ```bash
 PYTHONPATH=src python -m pytest tests/ -v
-# 42 passed
+# 43 passed
 ```
 
 ## Architecture

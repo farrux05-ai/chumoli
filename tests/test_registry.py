@@ -70,3 +70,23 @@ def test_all_manifests_returns_manifests_not_connectors() -> None:
     manifests = registry.all_manifests()
     assert len(manifests) == 1
     assert isinstance(manifests[0], ConnectorManifest)
+
+
+def test_builtin_sql_connectors_registered() -> None:
+    """PostgreSQL, MySQL va generic sql_database bir xil build mantig'i bilan ro'yxatda."""
+    from uzpipe.connectors import register_builtin_connectors
+    from uzpipe.connectors.base import registry
+
+    register_builtin_connectors()
+    keys = {m.key for m in registry.all_manifests()}
+    assert "postgresql" in keys
+    assert "mysql" in keys
+    assert "sql_database" in keys
+    assert "rest_api" in keys
+
+    pg = registry.get_manifest("postgresql")
+    assert pg.label == "PostgreSQL"
+    assert any(f.key == "connection_string" and f.secret for f in pg.fields)
+
+    my = registry.get_manifest("mysql")
+    assert my.label == "MySQL"
