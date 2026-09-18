@@ -73,6 +73,7 @@ tr:last-child td{border-bottom:none}
 .status-pill{margin-left:auto;display:flex;align-items:center;gap:7px;padding:5px 11px;border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--dim)}
 .status-pill .d{width:7px;height:7px;border-radius:50%;background:var(--green)}
 .header-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+.conn-label{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:6px;background:var(--surface-2);border:1px solid var(--border);font-size:12px;font-weight:500}
 </style>
 </head>
 <body>
@@ -107,6 +108,25 @@ let pipelines = [];
 let page = 'pipelines';
 let selectedConnector = null;
 let step = 1;
+
+const CONNECTOR_ORDER = ['postgresql', 'mysql', 'rest_api', 'sql_database'];
+
+function connectorLabel(key) {
+  const m = connectors.find(x => x.key === key);
+  return m ? m.label : key;
+}
+
+function sortedConnectors() {
+  const byKey = Object.fromEntries(connectors.map(c => [c.key, c]));
+  const ordered = [];
+  for (const k of CONNECTOR_ORDER) {
+    if (byKey[k]) ordered.push(byKey[k]);
+  }
+  for (const c of connectors) {
+    if (!CONNECTOR_ORDER.includes(c.key)) ordered.push(c);
+  }
+  return ordered;
+}
 
 async function api(path, opts={}) {
   const r = await fetch(API + path, {
@@ -173,13 +193,14 @@ async function loadAll() {
 function render() {
   const c = document.getElementById('content');
   if (page === 'connectors') {
+    const list = sortedConnectors();
     c.innerHTML = `<div class="page-title">Connectors</div>
       <div class="page-sub">Manifest-driven katalog — forma shu yerdan chiziladi</div>
-      <div class="cards">${connectors.map(x => `
+      <div class="cards">${list.map(x => `
         <div class="card">
           <div class="card-title">${x.label}</div>
           <div class="card-desc">${x.description || ''}</div>
-          <div style="margin-top:10px;font-size:11.5px;color:var(--faint)">${x.category} · ${x.fields.length} maydon</div>
+          <div style="margin-top:10px;font-size:11.5px;color:var(--faint)">${x.category} · ${x.fields.length} maydon · <span class="mono">${x.key}</span></div>
         </div>`).join('')}</div>`;
     return;
   }
@@ -191,13 +212,13 @@ function render() {
       </div>
       <button class="btn btn-primary" id="btn-add">+ Yangi pipeline</button>
     </div>
-    ${pipelines.length === 0 ? `<div class="empty"><div style="font-weight:550;color:var(--dim);margin-bottom:4px">Hali pipeline yo'q</div>Yangi pipeline qo'shing — REST API yoki SQL Database</div>` : `
+    ${pipelines.length === 0 ? `<div class="empty"><div style="font-weight:550;color:var(--dim);margin-bottom:4px">Hali pipeline yo'q</div>PostgreSQL, MySQL yoki REST API orqali yangi pipeline qo'shing</div>` : `
     <div class="table-wrap"><table>
       <thead><tr><th>Nom</th><th>Connector</th><th>Yangilangan</th><th></th></tr></thead>
       <tbody>${pipelines.map(p => `
         <tr>
           <td><strong>${p.name}</strong></td>
-          <td class="mono">${p.connector_key}</td>
+          <td><span class="conn-label">${connectorLabel(p.connector_key)}</span></td>
           <td style="color:var(--faint)">${p.updated_at || '—'}</td>
           <td><div class="row-actions">
             <button class="btn btn-outline" data-run="${p.name}">Run</button>
@@ -251,8 +272,9 @@ function renderDrawer() {
   const body = document.getElementById('drawer-body');
   const foot = document.getElementById('drawer-foot');
   if (step === 1) {
+    const list = sortedConnectors();
     body.innerHTML = `<div style="font-size:11.5px;font-weight:550;color:var(--faint);margin-bottom:10px;text-transform:uppercase">Connector tanlang</div>
-      <div class="cards">${connectors.map(x => `
+      <div class="cards">${list.map(x => `
         <button class="card ${selectedConnector===x.key?'selected':''}" data-ck="${x.key}">
           <div class="card-title">${x.label}</div>
           <div class="card-desc">${x.description||''}</div>
@@ -269,14 +291,17 @@ function renderDrawer() {
   const m = connectors.find(x => x.key === selectedConnector);
   body.innerHTML = `
     <div class="field"><label>Pipeline nomi</label>
-      <input id="f-name" placeholder="masalan demo_rest" />
+      <input id="f-name" placeholder="masalan postgres_orders" />
       <div class="field-hint">Faqat harf, raqam, _ va -</div></div>
     ${(m?.fields||[]).map(f => fieldHtml(f)).join('')}
     <div class="field"><label>Destination</label>
-      <select id="f-dest"><option value="duckdb">DuckDB (local)</option></select>
-      <div class="field-hint">MVP: faqat DuckDB</div></div>
+      <select id="f-dest">
+        <option value="duckdb">DuckDB (local)</option>
+      </select>
+      <div class="field-hint">MVP: local DuckDB. PostgreSQL destination keyinroq.</div></div>
     <div class="field"><label>Dataset nomi</label>
-      <input id="f-dataset" value="raw" /></div>
+      <input id="f-dataset" value="raw" />
+      <div class="field-hint">dlt schema / dataset nomi</div></div>
   `;
   foot.innerHTML = `
     <button class="btn btn-outline" id="back2">Orqaga</button>
