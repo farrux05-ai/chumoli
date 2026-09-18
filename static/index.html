@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>UzPipe</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f7f4ef;--bg-warm:#f0ebe3;--surface:#fff;--surface-2:#faf8f5;
+  --hover:#efeae2;--border:#e5dfd5;--border-s:#d6cfc3;
+  --text:#1c1917;--dim:#57534e;--faint:#a8a29e;
+  --accent:#0d9488;--accent-hover:#0f766e;--accent-soft:rgba(13,148,136,.1);
+  --green:#059669;--red:#dc2626;--amber:#d97706;
+  --shadow:0 1px 3px rgba(28,25,23,.04),0 4px 12px rgba(28,25,23,.03);
+  --radius:10px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;font-size:13.5px}
+button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font-family:inherit;font-size:inherit}
+#app{display:flex;height:100vh;overflow:hidden}
+#sidebar{width:220px;flex-shrink:0;border-right:1px solid var(--border);background:var(--bg-warm);display:flex;flex-direction:column}
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#topbar{height:52px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:center;padding:0 20px;gap:12px}
+#content{flex:1;overflow-y:auto;padding:28px}
+.logo{display:flex;align-items:center;gap:10px;padding:16px 14px;border-bottom:1px solid var(--border);font-weight:600}
+.logo-mark{width:28px;height:28px;border-radius:7px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+.nav-item{display:block;width:100%;text-align:left;padding:9px 14px;margin:2px 8px;width:calc(100% - 16px);border-radius:8px;color:var(--dim);font-weight:500}
+.nav-item:hover{background:var(--hover);color:var(--text)}
+.nav-item.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+.page-title{font-size:20px;font-weight:600;letter-spacing:-.02em}
+.page-sub{color:var(--faint);margin-top:4px;margin-bottom:20px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:8px;font-weight:500;transition:.12s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-hover)}
+.btn-outline{border:1px solid var(--border-s);background:var(--surface)}.btn-outline:hover{background:var(--hover)}
+.btn-danger{color:var(--red)}.btn-danger:hover{background:rgba(220,38,38,.08)}
+.btn:disabled{opacity:.45;pointer-events:none}
+.table-wrap{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse;text-align:left}
+th{padding:11px 16px;font-size:11.5px;font-weight:550;color:var(--faint);text-transform:uppercase;letter-spacing:.03em;background:var(--surface-2);border-bottom:1px solid var(--border)}
+td{padding:13px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.mono{font-family:'JetBrains Mono',monospace;font-size:12px}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.badge.ok{color:var(--green)}.badge.err{color:var(--red)}.badge.dim{color:var(--faint)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.card{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:16px;cursor:pointer;transition:.12s;text-align:left;box-shadow:var(--shadow)}
+.card:hover{border-color:var(--border-s);box-shadow:0 8px 24px rgba(28,25,23,.06)}
+.card.selected{border-color:var(--accent);background:var(--accent-soft)}
+.card-title{font-weight:600;margin-bottom:4px}.card-desc{color:var(--faint);font-size:12.5px;line-height:1.4}
+.overlay{position:fixed;inset:0;background:rgba(28,25,23,.25);backdrop-filter:blur(2px);z-index:40;display:none}
+.overlay.show{display:block}
+.drawer{position:fixed;top:0;right:0;height:100vh;width:420px;max-width:100vw;background:var(--surface);border-left:1px solid var(--border);z-index:50;transform:translateX(100%);transition:transform .25s;display:flex;flex-direction:column;box-shadow:-8px 0 30px rgba(28,25,23,.06)}
+.drawer.open{transform:translateX(0)}
+.drawer-head{height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--border);font-weight:550}
+.drawer-body{flex:1;overflow-y:auto;padding:18px}
+.drawer-foot{padding:14px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface-2)}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12.5px;font-weight:500;color:var(--dim);margin-bottom:6px}
+.field input,.field select,.field textarea{
+  width:100%;height:38px;border:1px solid var(--border);border-radius:8px;padding:0 12px;background:var(--surface);outline:none}
+.field textarea{height:auto;min-height:72px;padding:10px 12px}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.field-hint{font-size:11.5px;color:var(--faint);margin-top:4px}
+.field-err{font-size:12px;color:var(--red);margin-top:4px}
+#toast{position:fixed;bottom:24px;right:24px;z-index:90;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.toast{padding:12px 16px;border:1px solid var(--border);border-radius:10px;background:var(--surface);box-shadow:0 8px 30px rgba(28,25,23,.08);max-width:340px}
+.toast.ok{border-color:rgba(5,150,105,.3)}.toast.err{border-color:rgba(220,38,38,.3)}
+.empty{text-align:center;padding:48px 24px;color:var(--faint)}
+.row-actions{display:flex;gap:4px;justify-content:flex-end}
+.status-pill{margin-left:auto;display:flex;align-items:center;gap:7px;padding:5px 11px;border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--dim)}
+.status-pill .d{width:7px;height:7px;border-radius:50%;background:var(--green)}
+.header-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="logo"><div class="logo-mark">U</div>UzPipe</div>
+    <nav style="padding:12px 0;flex:1">
+      <button class="nav-item active" data-page="pipelines">Pipelines</button>
+      <button class="nav-item" data-page="connectors">Connectors</button>
+    </nav>
+    <div style="padding:12px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--faint)">Local · dlt engine</div>
+  </aside>
+  <div id="main">
+    <header id="topbar">
+      <span id="top-title" style="font-weight:550">Pipelines</span>
+      <div class="status-pill"><span class="d"></span><span id="health-text">…</span></div>
+    </header>
+    <div id="content"></div>
+  </div>
+</div>
+<div class="overlay" id="overlay"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head"><span id="drawer-title">Yangi pipeline</span><button class="btn" id="drawer-close">✕</button></div>
+  <div class="drawer-body" id="drawer-body"></div>
+  <div class="drawer-foot" id="drawer-foot"></div>
+</div>
+<div id="toast"></div>
+<script>
+const API = '';
+let connectors = [];
+let pipelines = [];
+let page = 'pipelines';
+let selectedConnector = null;
+let step = 1;
+
+async function api(path, opts={}) {
+  const r = await fetch(API + path, {
+    headers: {'Content-Type': 'application/json', ...(opts.headers||{})},
+    ...opts,
+  });
+  const text = await r.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  if (!r.ok) {
+    const msg = (data && (data.detail || data.validation_errors || data.message)) || text || r.statusText;
+    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+  }
+  return data;
+}
+
+function toast(msg, type='ok') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function openDrawer() {
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('drawer').classList.add('open');
+}
+function closeDrawer() {
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('drawer').classList.remove('open');
+  step = 1; selectedConnector = null;
+}
+
+document.getElementById('drawer-close').onclick = closeDrawer;
+document.getElementById('overlay').onclick = closeDrawer;
+
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    page = btn.dataset.page;
+    document.getElementById('top-title').textContent = page === 'pipelines' ? 'Pipelines' : 'Connectors';
+    render();
+  };
+});
+
+async function loadAll() {
+  try {
+    const h = await api('/api/health');
+    document.getElementById('health-text').textContent = h.status === 'ok' ? 'API ishlayapti' : h.status;
+  } catch {
+    document.getElementById('health-text').textContent = 'API offline';
+  }
+  try {
+    connectors = await api('/api/connectors');
+    pipelines = await api('/api/pipelines');
+  } catch (e) {
+    toast('Yuklash xatosi: ' + e.message, 'err');
+  }
+  render();
+}
+
+function render() {
+  const c = document.getElementById('content');
+  if (page === 'connectors') {
+    c.innerHTML = `<div class="page-title">Connectors</div>
+      <div class="page-sub">Manifest-driven katalog — forma shu yerdan chiziladi</div>
+      <div class="cards">${connectors.map(x => `
+        <div class="card">
+          <div class="card-title">${x.label}</div>
+          <div class="card-desc">${x.description || ''}</div>
+          <div style="margin-top:10px;font-size:11.5px;color:var(--faint)">${x.category} · ${x.fields.length} maydon</div>
+        </div>`).join('')}</div>`;
+    return;
+  }
+  c.innerHTML = `
+    <div class="header-row">
+      <div>
+        <div class="page-title">Pipelines</div>
+        <div class="page-sub">${pipelines.length} ta saqlangan pipeline</div>
+      </div>
+      <button class="btn btn-primary" id="btn-add">+ Yangi pipeline</button>
+    </div>
+    ${pipelines.length === 0 ? `<div class="empty"><div style="font-weight:550;color:var(--dim);margin-bottom:4px">Hali pipeline yo'q</div>Yangi pipeline qo'shing — REST API yoki SQL Database</div>` : `
+    <div class="table-wrap"><table>
+      <thead><tr><th>Nom</th><th>Connector</th><th>Yangilangan</th><th></th></tr></thead>
+      <tbody>${pipelines.map(p => `
+        <tr>
+          <td><strong>${p.name}</strong></td>
+          <td class="mono">${p.connector_key}</td>
+          <td style="color:var(--faint)">${p.updated_at || '—'}</td>
+          <td><div class="row-actions">
+            <button class="btn btn-outline" data-run="${p.name}">Run</button>
+            <button class="btn btn-danger" data-del="${p.name}">O'chir</button>
+          </div></td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`}`;
+  const add = document.getElementById('btn-add');
+  if (add) add.onclick = startAdd;
+  c.querySelectorAll('[data-run]').forEach(b => b.onclick = () => runPipeline(b.dataset.run, b));
+  c.querySelectorAll('[data-del]').forEach(b => b.onclick = () => delPipeline(b.dataset.del));
+}
+
+async function runPipeline(name, btn) {
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const r = await api('/api/pipelines/' + encodeURIComponent(name) + '/run', {method:'POST'});
+    const rows = Object.entries(r.row_counts || {}).map(([t,n]) => t + ': ' + n).join(', ') || '0 rows';
+    if (r.success && r.quality_passed) toast('✓ ' + name + ' — ' + rows, 'ok');
+    else if (r.success) toast('Yuklandi, lekin quality fail: ' + name, 'err');
+    else toast('Run muvaffaqiyatsiz: ' + name, 'err');
+  } catch (e) {
+    toast(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run';
+  }
+}
+
+async function delPipeline(name) {
+  if (!confirm("O'chirish: " + name + '?')) return;
+  try {
+    await api('/api/pipelines/' + encodeURIComponent(name), {method:'DELETE'});
+    toast("O'chirildi: " + name);
+    pipelines = await api('/api/pipelines');
+    render();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+function startAdd() {
+  step = 1;
+  selectedConnector = null;
+  document.getElementById('drawer-title').textContent = 'Yangi pipeline';
+  renderDrawer();
+  openDrawer();
+}
+
+function renderDrawer() {
+  const body = document.getElementById('drawer-body');
+  const foot = document.getElementById('drawer-foot');
+  if (step === 1) {
+    body.innerHTML = `<div style="font-size:11.5px;font-weight:550;color:var(--faint);margin-bottom:10px;text-transform:uppercase">Connector tanlang</div>
+      <div class="cards">${connectors.map(x => `
+        <button class="card ${selectedConnector===x.key?'selected':''}" data-ck="${x.key}">
+          <div class="card-title">${x.label}</div>
+          <div class="card-desc">${x.description||''}</div>
+        </button>`).join('')}</div>`;
+    body.querySelectorAll('[data-ck]').forEach(b => b.onclick = () => {
+      selectedConnector = b.dataset.ck;
+      renderDrawer();
+    });
+    foot.innerHTML = `<button class="btn btn-primary" id="next1" ${selectedConnector?'':'disabled'}>Keyingi</button>`;
+    const n = document.getElementById('next1');
+    if (n) n.onclick = () => { step = 2; renderDrawer(); };
+    return;
+  }
+  const m = connectors.find(x => x.key === selectedConnector);
+  body.innerHTML = `
+    <div class="field"><label>Pipeline nomi</label>
+      <input id="f-name" placeholder="masalan demo_rest" />
+      <div class="field-hint">Faqat harf, raqam, _ va -</div></div>
+    ${(m?.fields||[]).map(f => fieldHtml(f)).join('')}
+    <div class="field"><label>Destination</label>
+      <select id="f-dest"><option value="duckdb">DuckDB (local)</option></select>
+      <div class="field-hint">MVP: faqat DuckDB</div></div>
+    <div class="field"><label>Dataset nomi</label>
+      <input id="f-dataset" value="raw" /></div>
+  `;
+  foot.innerHTML = `
+    <button class="btn btn-outline" id="back2">Orqaga</button>
+    <button class="btn btn-primary" id="save2">Saqlash</button>`;
+  document.getElementById('back2').onclick = () => { step = 1; renderDrawer(); };
+  document.getElementById('save2').onclick = savePipeline;
+}
+
+function fieldHtml(f) {
+  const req = f.required ? ' *' : '';
+  if (f.type === 'select') {
+    return `<div class="field"><label>${f.label}${req}</label>
+      <select id="f-${f.key}">${(f.options||[]).map(o =>
+        `<option value="${o.value}" ${f.default===o.value?'selected':''}>${o.label}</option>`).join('')}
+      </select>
+      ${f.help_text?`<div class="field-hint">${f.help_text}</div>`:''}</div>`;
+  }
+  const type = f.type === 'password' ? 'password' : (f.type === 'number' ? 'number' : 'text');
+  return `<div class="field"><label>${f.label}${req}</label>
+    <input id="f-${f.key}" type="${type}" placeholder="${f.placeholder||''}" value="${f.default ?? ''}" />
+    ${f.help_text?`<div class="field-hint">${f.help_text}</div>`:''}</div>`;
+}
+
+async function savePipeline() {
+  const m = connectors.find(x => x.key === selectedConnector);
+  const name = document.getElementById('f-name').value.trim();
+  if (!name) { toast('Nom majburiy', 'err'); return; }
+  const source_params = {};
+  const secrets = {};
+  for (const f of (m?.fields || [])) {
+    const el = document.getElementById('f-' + f.key);
+    if (!el) continue;
+    const v = el.value;
+    if (f.secret) secrets[f.key] = v;
+    else source_params[f.key] = v;
+  }
+  const body = {
+    name,
+    connector_key: selectedConnector,
+    source_params,
+    secrets,
+    destination: {
+      connector: document.getElementById('f-dest').value,
+      dataset_name: document.getElementById('f-dataset').value || 'raw',
+    },
+    write_disposition: 'replace',
+  };
+  try {
+    await api('/api/pipelines', {method:'POST', body: JSON.stringify(body)});
+    toast('Saqlandi: ' + name);
+    closeDrawer();
+    pipelines = await api('/api/pipelines');
+    page = 'pipelines';
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.page==='pipelines'));
+    document.getElementById('top-title').textContent = 'Pipelines';
+    render();
+  } catch (e) {
+    toast(e.message, 'err');
+  }
+}
+
+loadAll();
+</script>
+</body>
+</html>
