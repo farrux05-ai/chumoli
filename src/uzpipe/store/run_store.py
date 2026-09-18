@@ -2,13 +2,8 @@
 uzpipe.store.run_store
 ========================
 
-Pipeline run tarixi — monitor / dashboard uchun.
-
-NEGA ALOHIDA FAYL (control_store emas)
-----------------------------------------
-ControlStore — konfiguratsiya (kam yozish, maxfiy ma'lumot).
-RunStore — har bir run natijasi (ko'p yozish, hech qanday secret yo'q).
-Ikki xil yozish naqshi → ikki xil do'kon (architecture/overview).
+Pipeline run history for monitor / dashboard.
+Includes duration + throughput for volume demos.
 """
 
 from __future__ import annotations
@@ -19,7 +14,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -32,7 +26,10 @@ CREATE TABLE IF NOT EXISTS runs (
     error TEXT,
     started_at TEXT NOT NULL,
     finished_at TEXT NOT NULL,
-    trigger TEXT NOT NULL DEFAULT 'manual'
+    trigger TEXT NOT NULL DEFAULT 'manual',
+    duration_seconds REAL NOT NULL DEFAULT 0,
+    total_rows INTEGER NOT NULL DEFAULT 0,
+    rows_per_second REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_runs_pipeline ON runs(pipeline_name);
 CREATE INDEX IF NOT EXISTS idx_runs_finished ON runs(finished_at DESC);
@@ -50,7 +47,10 @@ class RunRecord:
     error: str | None
     started_at: str
     finished_at: str
-    trigger: str  # manual | schedule
+    trigger: str
+    duration_seconds: float = 0.0
+    total_rows: int = 0
+    rows_per_second: float = 0.0
 
 
 class RunStore:
@@ -61,7 +61,8 @@ class RunStore:
 
     @staticmethod
     def _default_db_path() -> Path:
-        return Path.home() / ".uzpipe" / "uzpipe_runs.db"
+        home = Path(__import__("os").environ.get("UZPIPE_HOME") or (Path.home() / ".uzpipe"))
+        return home / "uzpipe_runs.db"
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -72,6 +73,19 @@ class RunStore:
     def _init(self) -> None:
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(runs)").fetchall()}
+            if "duration_seconds" not in cols:
+                conn.execute(
+                    "ALTER TABLE runs ADD COLUMN duration_seconds REAL NOT NULL DEFAULT 0"
+                )
+            if "total_rows" not in cols:
+                conn.execute(
+                    "ALTER TABLE runs ADD COLUMN total_rows INTEGER NOT NULL DEFAULT 0"
+                )
+            if "rows_per_second" not in cols:
+                conn.execute(
+                    "ALTER TABLE runs ADD COLUMN rows_per_second REAL NOT NULL DEFAULT 0"
+                )
 
     def record(
         self,
@@ -85,28 +99,40 @@ class RunStore:
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
         trigger: str = "manual",
+        duration_seconds: float = 0.0,
+        total_rows: int | None = None,
+        rows_per_second: float | None = None,
     ) -> int:
         started = (started_at or datetime.now(UTC)).isoformat()
         finished = (finished_at or datetime.now(UTC)).isoformat()
+        counts = row_counts or {}
+        total = total_rows if total_rows is not None else sum(counts.values())
+        rps = rows_per_second
+        if rps is None:
+            rps = (total / duration_seconds) if duration_seconds > 0 else 0.0
         with self._connect() as conn:
             cur = conn.execute(
                 """
                 INSERT INTO runs (
                     pipeline_name, success, quality_passed,
                     row_counts_json, quality_details_json, error,
-                    started_at, finished_at, trigger
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    started_at, finished_at, trigger,
+                    duration_seconds, total_rows, rows_per_second
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     pipeline_name,
                     1 if success else 0,
                     1 if quality_passed else 0,
-                    json.dumps(row_counts or {}),
+                    json.dumps(counts),
                     json.dumps(quality_details or []),
                     error,
                     started,
                     finished,
                     trigger,
+                    float(duration_seconds),
+                    int(total),
+                    float(rps),
                 ),
             )
             return int(cur.lastrowid)
@@ -144,15 +170,20 @@ class RunStore:
             last = conn.execute(
                 "SELECT finished_at FROM runs ORDER BY id DESC LIMIT 1"
             ).fetchone()
+            row_sum = conn.execute(
+                "SELECT COALESCE(SUM(total_rows), 0) FROM runs"
+            ).fetchone()[0]
         return {
             "total_runs": total,
             "success": ok,
             "failed": fail,
             "last_run_at": last[0] if last else None,
+            "total_rows_loaded": int(row_sum or 0),
         }
 
     @staticmethod
     def _row_to_dict(r: sqlite3.Row) -> dict[str, Any]:
+        keys = set(r.keys())
         return {
             "id": r["id"],
             "pipeline_name": r["pipeline_name"],
@@ -164,4 +195,11 @@ class RunStore:
             "started_at": r["started_at"],
             "finished_at": r["finished_at"],
             "trigger": r["trigger"],
+            "duration_seconds": float(r["duration_seconds"] or 0)
+            if "duration_seconds" in keys
+            else 0.0,
+            "total_rows": int(r["total_rows"] or 0) if "total_rows" in keys else 0,
+            "rows_per_second": float(r["rows_per_second"] or 0)
+            if "rows_per_second" in keys
+            else 0.0,
         }
