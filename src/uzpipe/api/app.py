@@ -4,12 +4,8 @@ uzpipe.api.app
 
 HTML dashboard va tashqi klientlar uchun yupqa FastAPI qatlami.
 
-Faqat uchta fundament chaqiruvini ochadi:
-  - registry.all_manifests()
-  - ControlStore.save / list_all / load / delete
-  - run_pipeline_by_name()
-
-Yangi biznes-mantiq yo'q — CLI bilan bir xil entry point'lar.
+Faqat fundament chaqiruvlarini ochadi:
+  - registry, ControlStore, RunStore, scheduler, run_pipeline_by_name
 """
 
 from __future__ import annotations
@@ -32,8 +28,20 @@ from uzpipe.core.config import (
     ScheduleConfig,
     WriteDisposition,
 )
+from uzpipe.core.destinations import (
+    DEST_CONNECTION_SECRET_KEY,
+    all_destinations,
+    get_destination,
+)
 from uzpipe.core.pipeline_runner import run_pipeline_by_name
+from uzpipe.core.scheduler import (
+    reload_jobs,
+    start_scheduler,
+    status as scheduler_status,
+    stop_scheduler,
+)
 from uzpipe.store.control_store import ControlStore
+from uzpipe.store.run_store import RunStore
 
 register_builtin_connectors()
 
@@ -50,11 +58,20 @@ if _STATIC.is_dir():
     app.mount("/assets", StaticFiles(directory=_STATIC), name="assets")
 
 
+@app.on_event("startup")
+def _startup() -> None:
+    try:
+        start_scheduler()
+    except Exception:
+        pass
+
+
 def _store() -> ControlStore:
     return ControlStore()
 
 
-# ── request / response models ───────────────────────────────────────────────
+def _runs() -> RunStore:
+    return RunStore()
 
 
 class CreatePipelineBody(BaseModel):
@@ -79,9 +96,6 @@ class RunResponse(BaseModel):
     quality_details: list[dict[str, Any]]
 
 
-# ── routes ──────────────────────────────────────────────────────────────────
-
-
 @app.get("/")
 def index() -> FileResponse:
     index_path = _STATIC / "index.html"
@@ -91,13 +105,26 @@ def index() -> FileResponse:
 
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "uzpipe"}
+def health() -> dict[str, object]:
+    sched = scheduler_status()
+    stats = _runs().stats()
+    return {
+        "status": "ok",
+        "service": "uzpipe",
+        "version": "0.1.0",
+        "scheduler_running": sched.get("running", False),
+        "scheduler_jobs": sched.get("job_count", 0),
+        "runs": stats,
+    }
+
+
+@app.get("/api/destinations")
+def list_destinations() -> list[dict[str, Any]]:
+    return all_destinations()
 
 
 @app.get("/api/connectors")
 def list_connectors() -> list[dict[str, Any]]:
-    """Manifest-driven connector katalogi — forma shu yerdan chiziladi."""
     out: list[dict[str, Any]] = []
     for m in registry.all_manifests():
         out.append(
@@ -122,7 +149,6 @@ def get_pipeline(name: str) -> dict[str, Any]:
     stored = _store().load(name)
     if stored is None:
         raise HTTPException(404, f"Pipeline '{name}' topilmadi")
-    # secrets qaytarilmaydi
     return {
         "name": stored.config.name,
         "connector_key": stored.config.connector_key,
@@ -139,7 +165,6 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
     except KeyError as e:
         raise HTTPException(400, str(e)) from e
 
-    # secret field'larni source_params dan ajratish
     secret_keys = set(manifest.secret_keys())
     params = dict(body.source_params)
     secrets = dict(body.secrets)
@@ -149,22 +174,34 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
                 secrets[k] = str(params.pop(k))
             else:
                 params.pop(k, None)
-    # optional secret maydonlar (masalan rest_api.secret_value auth=none)
-    # ControlStore barcha secret_keys ni kutadi — yo'qlarini bo'sh string bilan to'ldiramiz
     for k in secret_keys:
         secrets.setdefault(k, "")
 
-    # forma validatsiyasi (secret'siz params + secrets birga)
     combined = {**params, **secrets}
     errors = manifest.validate_values(combined)
     if errors:
         raise HTTPException(422, {"validation_errors": errors})
 
+    dest_spec = get_destination(body.destination.connector)
+    if dest_spec is None:
+        raise HTTPException(
+            400,
+            f"Noma'lum destination: {body.destination.connector}. "
+            f"Mavjud: {[d['key'] for d in all_destinations()]}",
+        )
+    if dest_spec.needs_connection and not (body.destination.connection or "").strip():
+        raise HTTPException(422, f"{dest_spec.label} uchun connection majburiy")
+
+    dest = body.destination.model_copy()
+    if dest.connection:
+        secrets[DEST_CONNECTION_SECRET_KEY] = dest.connection
+        dest.connection = None
+
     config = PipelineConfig(
         name=body.name,
         connector_key=body.connector_key,
         source_params=params,
-        destination=body.destination,
+        destination=dest,
         write_disposition=body.write_disposition,
         primary_key=body.primary_key,
         schedule=body.schedule,
@@ -174,6 +211,11 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
         _store().save(config, secrets, manifest)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+    if config.schedule.kind.value == "interval":
+        try:
+            reload_jobs()
+        except Exception:
+            pass
     return {"status": "created", "name": config.name}
 
 
@@ -197,6 +239,17 @@ def run_pipeline(name: str) -> RunResponse:
         {"passed": o.passed, "detail": o.detail}
         for o in result.quality_report.outcomes
     ]
+    try:
+        _runs().record(
+            pipeline_name=result.pipeline_name,
+            success=result.success,
+            quality_passed=result.quality_report.all_passed,
+            row_counts=result.row_counts,
+            quality_details=details,
+            trigger="manual",
+        )
+    except Exception:
+        pass
     return RunResponse(
         pipeline_name=result.pipeline_name,
         success=result.success,
@@ -204,6 +257,36 @@ def run_pipeline(name: str) -> RunResponse:
         quality_passed=result.quality_report.all_passed,
         quality_details=details,
     )
+
+
+@app.get("/api/runs")
+def list_runs(limit: int = 50, pipeline_name: str | None = None) -> list[dict[str, object]]:
+    return _runs().list_recent(limit=limit, pipeline_name=pipeline_name)
+
+
+@app.get("/api/runs/stats")
+def run_stats() -> dict[str, object]:
+    return _runs().stats()
+
+
+@app.get("/api/scheduler")
+def get_scheduler() -> dict[str, object]:
+    return scheduler_status()
+
+
+@app.post("/api/scheduler/start")
+def scheduler_start() -> dict[str, object]:
+    return start_scheduler()
+
+
+@app.post("/api/scheduler/stop")
+def scheduler_stop() -> dict[str, object]:
+    return stop_scheduler()
+
+
+@app.post("/api/scheduler/reload")
+def scheduler_reload() -> dict[str, object]:
+    return reload_jobs()
 
 
 def main() -> None:
