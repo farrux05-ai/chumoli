@@ -3,22 +3,17 @@
 **Last verified:** 2026-09-18
 
 ## Tests
-- Unit/e2e fundament: **pytest** (sql + rest e2e, registry, CLI, quality, crypto)
-- FastAPI E2E: create REST pipeline → run against jsonplaceholder → rows to DuckDB
+- **45 passed** (sql + rest e2e, registry, destinations, CLI, quality, crypto)
 
 ## What exists now
 - Full foundation (manifest, ControlStore, pipeline_runner, quality, CLI)
-- **Connectors (user-facing):**
-  - **PostgreSQL** (`postgresql`)
-  - **MySQL** (`mysql`)
-  - **REST API** (`rest_api`)
-  - **SQL Database** generic (`sql_database`) — SQLite / MSSQL / Oracle + tests
-- All SQL variants share one dlt `sql_database` adapter
+- **Connectors:** PostgreSQL, MySQL, REST API, SQL Database (generic)
+- **Destinations (dlt built-in):** DuckDB, PostgreSQL, Filesystem/S3, ClickHouse
+- Destination connection secrets encrypted (not in config_json)
 - **FastAPI** + **HTML dashboard** (API-driven)
 - Entry: `uzpipe-api` / `python -m uzpipe.api.app`
 
 ## Still not done
 - UZ connectors (Payme, Click, 1C, Didox)
 - API monitor → GitHub issues
-- Destination UI beyond DuckDB (PostgreSQL dest)
 - Notify, scheduler
