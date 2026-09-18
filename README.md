@@ -9,17 +9,28 @@ pip install -e ".[dev]"
 PYTHONPATH=src python -m uzpipe.api.app
 ```
 
-Open: **http://127.0.0.1:8000/**
+Open **http://127.0.0.1:8000/**
 
-### What works (v1)
+Docker:
 
-- Connectors: **PostgreSQL**, **MySQL**, **REST API**, **SQL Database**
-- UZ payments: **Click**, **Payme**, **Uzum Market**
-- Destinations: **DuckDB**, **PostgreSQL**, **Filesystem/S3**, **ClickHouse**
-- **Run monitor** + **interval scheduler** (APScheduler)
-- Secrets encrypted · Quality checks · CLI + dashboard
+```bash
+docker compose up --build
+```
 
-### Tests
+## v1 features
+
+| Area | Status |
+|------|--------|
+| SQL (Postgres / MySQL / generic) | ✅ |
+| REST API | ✅ |
+| Click / Payme / Uzum Market | ✅ |
+| Destinations (DuckDB, Postgres, FS, ClickHouse) | ✅ |
+| Run monitor + last status | ✅ |
+| Interval scheduler | ✅ |
+| Encrypted secrets | ✅ |
+| Docker | ✅ |
+
+## Tests
 
 ```bash
 PYTHONPATH=src python -m pytest tests/ -v
@@ -29,9 +40,9 @@ PYTHONPATH=src python -m pytest tests/ -v
 ## Architecture
 
 ```
-HTML dashboard  →  FastAPI  →  ControlStore + RunStore + scheduler  →  dlt
+Dashboard → FastAPI → ControlStore + RunStore + Scheduler → dlt
 ```
 
-See `docs/status.md` and `AGENTS.md`.
+Data dir: `~/.uzpipe` or `$UZPIPE_HOME`.
 
 License: Apache-2.0

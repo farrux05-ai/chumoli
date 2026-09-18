@@ -1,0 +1,14 @@
+services:
+  uzpipe:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - uzpipe_data:/data
+    environment:
+      - UZPIPE_HOME=/data
+      - PYTHONPATH=/app/src
+    restart: unless-stopped
+
+volumes:
+  uzpipe_data:
