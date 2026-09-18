@@ -17,7 +17,8 @@ Open: **http://127.0.0.1:8000/**
 
 ### What works now
 
-- Connectors: **PostgreSQL**, **MySQL**, **REST API**, **SQL Database** (generic)
+- Connectors: **PostgreSQL**, **MySQL**, **REST API**, **SQL Database**
+- UZ payments: **Click**, **Payme**, **Uzum Market**
 - Destinations: **DuckDB**, **PostgreSQL**, **Filesystem/S3**, **ClickHouse**
 - Create pipeline from UI (manifest-driven form)
 - Run → real dlt load
@@ -29,7 +30,7 @@ Open: **http://127.0.0.1:8000/**
 
 ```bash
 PYTHONPATH=src python -m pytest tests/ -v
-# 45 passed
+# 52 passed
 ```
 
 ## Architecture
@@ -42,7 +43,7 @@ See `docs/status.md`, `MVP.md`, and `AGENTS.md` (project instructions).
 
 ## Not yet
 
-- UZ connectors (Payme, Click, 1C, Didox)
+- UZ connectors (1C, Didox, Soliq)
 - API change monitor → GitHub issues
 - Scheduler / notify
 

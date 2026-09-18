@@ -1,19 +1,18 @@
-# Status (MVP)
+# Status (MVP v1)
 
 **Last verified:** 2026-09-18
 
 ## Tests
-- **45 passed** (sql + rest e2e, registry, destinations, CLI, quality, crypto)
+- pytest (sql + rest e2e, UZ connectors unit, destinations, CLI, quality)
 
-## What exists now
-- Full foundation (manifest, ControlStore, pipeline_runner, quality, CLI)
+## v1 scope (solid)
 - **Connectors:** PostgreSQL, MySQL, REST API, SQL Database (generic)
-- **Destinations (dlt built-in):** DuckDB, PostgreSQL, Filesystem/S3, ClickHouse
-- Destination connection secrets encrypted (not in config_json)
-- **FastAPI** + **HTML dashboard** (API-driven)
-- Entry: `uzpipe-api` / `python -m uzpipe.api.app`
+- **UZ payments:** Click, Payme, Uzum Market
+- **Destinations:** DuckDB, PostgreSQL, Filesystem/S3, ClickHouse
+- Secrets encrypted (source + destination)
+- FastAPI + HTML dashboard
 
-## Still not done
-- UZ connectors (Payme, Click, 1C, Didox)
+## Not in v1
+- 1C, Didox, Soliq
 - API monitor → GitHub issues
-- Notify, scheduler
+- Scheduler / notify
