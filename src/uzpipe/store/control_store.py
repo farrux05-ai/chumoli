@@ -26,6 +26,16 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS saved_destinations (
+    id TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    connector TEXT NOT NULL,
+    connection_enc TEXT,
+    dataset_name TEXT NOT NULL DEFAULT 'raw',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -178,3 +188,96 @@ class ControlStore:
 
     def set_secret_setting(self, key: str, value: str) -> None:
         self.set_setting(key, self._cipher.encrypt(value))
+
+    # ------------------------------------------------------------------
+    # Saved destinations (reusable named configs — Fivetran-style)
+    # ------------------------------------------------------------------
+
+    def list_saved_destinations(self) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id, label, connector, dataset_name, created_at, updated_at "
+                "FROM saved_destinations ORDER BY label COLLATE NOCASE"
+            ).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "label": r["label"],
+                "connector": r["connector"],
+                "dataset_name": r["dataset_name"],
+                "created_at": r["created_at"],
+                "updated_at": r["updated_at"],
+            }
+            for r in rows
+        ]
+
+    def get_saved_destination(self, dest_id: str) -> dict[str, Any] | None:
+        """Return full saved dest including decrypted connection (for pipeline create)."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT id, label, connector, connection_enc, dataset_name, "
+                "created_at, updated_at FROM saved_destinations WHERE id = ?",
+                (dest_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        connection: str | None = None
+        if row["connection_enc"]:
+            try:
+                connection = self._cipher.decrypt(row["connection_enc"])
+            except Exception:
+                connection = None
+        return {
+            "id": row["id"],
+            "label": row["label"],
+            "connector": row["connector"],
+            "connection": connection,
+            "dataset_name": row["dataset_name"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def save_destination(
+        self,
+        *,
+        label: str,
+        connector: str,
+        connection: str | None = None,
+        dataset_name: str = "raw",
+        dest_id: str | None = None,
+    ) -> str:
+        """Insert or update a named destination. Returns id."""
+        import uuid
+
+        label = (label or "").strip()
+        if not label:
+            raise ValueError("Destination label majburiy")
+        connector = (connector or "").strip()
+        if not connector:
+            raise ValueError("Destination connector majburiy")
+
+        dest_id = dest_id or str(uuid.uuid4())
+        enc = self._cipher.encrypt(connection) if connection else None
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO saved_destinations
+                    (id, label, connector, connection_enc, dataset_name)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    label = excluded.label,
+                    connector = excluded.connector,
+                    connection_enc = excluded.connection_enc,
+                    dataset_name = excluded.dataset_name,
+                    updated_at = datetime('now')
+                """,
+                (dest_id, label, connector, enc, dataset_name or "raw"),
+            )
+        return dest_id
+
+    def delete_saved_destination(self, dest_id: str) -> bool:
+        with self._connect() as conn:
+            cur = conn.execute(
+                "DELETE FROM saved_destinations WHERE id = ?", (dest_id,)
+            )
+            return cur.rowcount > 0
