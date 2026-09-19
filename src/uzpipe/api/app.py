@@ -244,10 +244,11 @@ def index() -> HTMLResponse:
     html = index_path.read_text(encoding="utf-8")
     key = _get_api_key()
     meta = f'<meta name="uzpipe-api-key" content="{key}"/>'
-    if "uzpipe-api-key" not in html:
-        html = html.replace("</head>", f"  {meta}\n</head>", 1)
+    # Match real <meta> only — the name also appears in inline JS selectors.
+    if re.search(r'<meta\s+name=["\']uzpipe-api-key["\']', html):
+        html = re.sub(r'<meta\s+name=["\']uzpipe-api-key["\'][^>]*>', meta, html, count=1)
     else:
-        html = re.sub(r'<meta name="uzpipe-api-key"[^>]*>', meta, html, count=1)
+        html = html.replace("</head>", f"  {meta}\n</head>", 1)
     return HTMLResponse(html)
 
 
@@ -383,7 +384,7 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
         try:
             reload_jobs()
         except Exception:
-            pass
+            log.exception("scheduler_reload_failed after create name=%s", config.name)
     return {"status": "created", "name": config.name}
 
 

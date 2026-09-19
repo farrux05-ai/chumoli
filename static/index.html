@@ -382,6 +382,15 @@ async function renderSettings() {
         <div class="field-hint">ControlStore da shifrlangan saqlanadi</div>
       </div>
       <button class="btn btn-primary" id="tg-save">Saqlash</button>
+    </div>
+    <div class="section">
+      <div class="section-title">Demo volume</div>
+      <p style="color:var(--dim);margin-bottom:12px">Synthetic yuklama — API <span class="mono">POST /api/demo/volume</span></p>
+      <div class="field" style="max-width:200px">
+        <label>Qatorlar soni</label>
+        <input id="demo-rows" type="number" min="1000" max="1000000" value="100000" />
+      </div>
+      <button class="btn btn-outline" id="demo-run">Demo ishga tushirish</button>
     </div>`;
   document.getElementById('sched-start').onclick = async () => {
     try { scheduler = await api('/api/scheduler/start', {method:'POST'}); toast('Scheduler ishga tushdi'); renderSettings(); }
@@ -404,6 +413,17 @@ async function renderSettings() {
       document.getElementById('tg-token').value = '';
       renderSettings();
     } catch(e){ toast(e.message,'err'); }
+  };
+  document.getElementById('demo-run').onclick = async () => {
+    const btn = document.getElementById('demo-run');
+    const n = parseInt(document.getElementById('demo-rows').value, 10) || 100000;
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+      const r = await api('/api/demo/volume?row_count=' + encodeURIComponent(n), {method:'POST'});
+      toast('Demo: ' + (r.total_rows ?? n) + ' qator · ' + (r.rows_per_second ?? '—') + ' r/s', r.success ? 'ok' : 'err');
+    } catch(e){ toast(e.message,'err'); }
+    finally { btn.disabled = false; btn.textContent = 'Demo ishga tushirish'; }
   };
 }
 
@@ -541,6 +561,41 @@ function renderDrawer() {
         <option value="append">append</option>
         <option value="merge">merge</option>
       </select></div>
+    <div class="field"><label>Primary key (merge)</label>
+      <input id="f-pk" placeholder="id yoki col1,col2" />
+      <div class="field-hint">merge uchun ustunlar, vergul bilan</div></div>
+    <div class="field"><label>Jadval (schedule)</label>
+      <select id="f-sched-kind">
+        <option value="manual">Manual</option>
+        <option value="interval">Interval</option>
+      </select></div>
+    <div class="field" id="sched-interval-wrap" style="display:none">
+      <label>Interval (daqiqa)</label>
+      <input id="f-sched-min" type="number" min="1" value="60" />
+    </div>
+    <div class="field"><label>Quality — min qator</label>
+      <input id="f-q-min" type="number" min="0" placeholder="bo'sh = tekshirilmaydi" />
+    </div>
+    <div class="field"><label>Quality — not null ustunlar</label>
+      <input id="f-q-nn" placeholder="col1, col2" />
+    </div>
+    <div class="field"><label>Quality — no duplicates key</label>
+      <input id="f-q-dup" placeholder="id" />
+    </div>
+    <div class="field"><label>Quality — jadval nomi</label>
+      <input id="f-q-table" placeholder="ixtiyoriy" />
+    </div>
+    <div class="field"><label>Telegram chat id</label>
+      <input id="f-tg-chat" placeholder="masalan -100123…" />
+      <div class="field-hint">Notify uchun; token Settings da</div></div>
+    <div class="field" style="display:flex;gap:16px;align-items:center">
+      <label style="display:flex;align-items:center;gap:6px;margin:0;font-weight:500;color:var(--dim)">
+        <input type="checkbox" id="f-n-fail" checked /> Xatoda xabar
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;margin:0;font-weight:500;color:var(--dim)">
+        <input type="checkbox" id="f-n-ok" /> Muvaffaqiyatda xabar
+      </label>
+    </div>
   `;
   foot.innerHTML = `
     <button class="btn btn-outline" id="back2">Orqaga</button>
@@ -562,6 +617,13 @@ function renderDrawer() {
   };
   destSel.onchange = syncDest;
   syncDest();
+  const sk = document.getElementById('f-sched-kind');
+  const syncSched = () => {
+    document.getElementById('sched-interval-wrap').style.display =
+      sk.value === 'interval' ? 'block' : 'none';
+  };
+  sk.onchange = syncSched;
+  syncSched();
 }
 
 function fieldHtml(f) {
@@ -601,6 +663,30 @@ async function savePipeline() {
   if (destConnEl && destConnEl.offsetParent !== null && destConnEl.value) {
     dest.connection = destConnEl.value;
   }
+  const pkRaw = (document.getElementById('f-pk').value || '').trim();
+  const primary_key = pkRaw ? pkRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const schedKind = document.getElementById('f-sched-kind').value || 'manual';
+  const schedMin = parseInt(document.getElementById('f-sched-min').value, 10);
+  const schedule = {
+    kind: schedKind,
+    interval_minutes: schedKind === 'interval' && !isNaN(schedMin) ? schedMin : null,
+  };
+  const qMin = document.getElementById('f-q-min').value;
+  const qNn = (document.getElementById('f-q-nn').value || '').trim();
+  const qDup = (document.getElementById('f-q-dup').value || '').trim();
+  const qTable = (document.getElementById('f-q-table').value || '').trim();
+  const quality = {
+    row_count_min: qMin !== '' ? parseInt(qMin, 10) : null,
+    not_null_columns: qNn ? qNn.split(',').map(s => s.trim()).filter(Boolean) : [],
+    no_duplicates_key: qDup || null,
+    table_name: qTable || null,
+  };
+  const tgChat = (document.getElementById('f-tg-chat').value || '').trim();
+  const notify = {
+    on_failure: document.getElementById('f-n-fail').checked,
+    on_success: document.getElementById('f-n-ok').checked,
+    telegram_chat_id: tgChat || null,
+  };
   const body = {
     name,
     connector_key: selectedConnector,
@@ -608,6 +694,10 @@ async function savePipeline() {
     secrets,
     destination: dest,
     write_disposition: document.getElementById('f-wd').value || 'replace',
+    primary_key,
+    schedule,
+    quality,
+    notify,
   };
   try {
     await api('/api/pipelines', {method:'POST', body: JSON.stringify(body)});
