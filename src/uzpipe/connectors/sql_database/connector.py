@@ -205,3 +205,31 @@ class SqlDatabaseConnector:
 
 # Orqa-moslik: eski importlar MANIFEST ni kutishi mumkin
 MANIFEST = SQL_DATABASE_MANIFEST
+
+
+def inspect_sql_tables(connection_string: str) -> list[str]:
+    """Live DB dan jadval nomlarini qaytaradi (SQLAlchemy inspect).
+
+    Faqat table-level — column-level keyinroq (YAGNI).
+    Ulanish xatosida ValueError (o'zbekcha) ko'tariladi.
+    """
+    from sqlalchemy import create_engine, inspect
+    from sqlalchemy.exc import SQLAlchemyError
+
+    cred = (connection_string or "").strip()
+    if not cred:
+        raise ValueError("Connection string bo'sh")
+
+    _preflight_sqlite(cred)
+
+    try:
+        engine = create_engine(cred)
+        with engine.connect() as conn:
+            insp = inspect(conn)
+            tables = sorted(insp.get_table_names())
+        engine.dispose()
+    except SQLAlchemyError as e:
+        raise ValueError(f"Ulanish yoki schema o'qish xatosi: {e}") from e
+    except Exception as e:
+        raise ValueError(f"Ulanish yoki schema o'qish xatosi: {e}") from e
+    return tables
