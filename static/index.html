@@ -127,6 +127,7 @@ let page = 'pipelines';
 let selectedConnector = null;
 let step = 1;
 let pollTimers = {};
+let recoverPipeline = null;
 
 function connectorLabel(key) {
   const m = connectors.find(x => x.key === key);
@@ -298,6 +299,7 @@ function renderPipelines() {
           <td class="mono">${lr ? fmtDur(lr.duration_seconds) : '—'}</td>
           <td><div class="row-actions">
             <button class="btn btn-outline btn-sm" data-run="${esc(p.name)}">Run</button>
+            ${lr && lr.success === false ? `<button class="btn btn-outline btn-sm" data-recover="${esc(p.name)}">Tiklash</button>` : ''}
             <button class="btn btn-danger btn-sm" data-del="${esc(p.name)}">O'chir</button>
           </div></td>
         </tr>`;
@@ -308,6 +310,7 @@ function renderPipelines() {
   if (add) add.onclick = startAdd;
   c.querySelectorAll('[data-run]').forEach(b => b.onclick = () => runPipeline(b.dataset.run, b));
   c.querySelectorAll('[data-del]').forEach(b => b.onclick = () => delPipeline(b.dataset.del));
+  c.querySelectorAll('[data-recover]').forEach(b => b.onclick = () => openRecover(b.dataset.recover));
 }
 
 async function renderRuns() {
@@ -327,15 +330,24 @@ async function renderRuns() {
     ${runs.length === 0 ? `<div class="empty">Hali run yo'q</div>` : `
     <div class="table-wrap"><table>
       <thead><tr><th>Pipeline</th><th>Status</th><th>Trigger</th><th>Qatorlar</th><th>Davomiylik</th><th>Vaqt</th></tr></thead>
-      <tbody>${runs.map(r => `
-        <tr>
+      <tbody>${runs.map(r => {
+        let qDetail = '';
+        if (r.success && r.quality_passed === false && Array.isArray(r.quality_details)) {
+          const fail = r.quality_details.find(d => d && d.passed === false);
+          if (fail && fail.detail) {
+            const t = String(fail.detail);
+            qDetail = `<div style="font-size:11.5px;color:var(--amber);margin-top:3px;max-width:280px">${esc(t.length > 80 ? t.slice(0, 80) + '…' : t)}</div>`;
+          }
+        }
+        return `<tr>
           <td><strong>${esc(r.pipeline_name)}</strong></td>
-          <td>${lastRunBadge(r)}</td>
+          <td>${lastRunBadge(r)}${qDetail}</td>
           <td class="mono">${esc(r.trigger || '—')}</td>
           <td class="mono">${r.total_rows != null ? r.total_rows : '—'}</td>
           <td class="mono">${fmtDur(r.duration_seconds)}</td>
           <td style="color:var(--faint)">${fmtTime(r.finished_at)}</td>
-        </tr>`).join('')}
+        </tr>`;
+      }).join('')}
       </tbody>
     </table></div>`}`;
 }
@@ -611,7 +623,77 @@ async function savePipeline() {
   }
 }
 
+async function openRecover(name) {
+  recoverPipeline = name;
+  document.getElementById('drawer-title').textContent = 'Tiklash: ' + name;
+  const body = document.getElementById('drawer-body');
+  const foot = document.getElementById('drawer-foot');
+  body.innerHTML = `<div style="color:var(--faint)">Failed jobs yuklanmoqda…</div>`;
+  foot.innerHTML = `<button class="btn btn-outline" id="recover-close">Yopish</button>`;
+  document.getElementById('recover-close').onclick = () => { recoverPipeline = null; closeDrawer(); };
+  openDrawer();
+  let jobs = [];
+  try {
+    jobs = await api('/api/pipelines/' + encodeURIComponent(name) + '/failed-jobs');
+  } catch (e) {
+    toast('Failed jobs: ' + e.message, 'err');
+  }
+  const listHtml = (!jobs || jobs.length === 0 || (jobs.length === 1 && (!jobs[0].detail || /none/i.test(jobs[0].detail))))
+    ? `<div class="empty" style="padding:24px">No failed jobs found — try running again</div>`
+    : `<ul style="list-style:none;padding:0;margin:0 0 16px">${jobs.map(j =>
+        `<li style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--surface-2);font-size:12.5px">${esc(j.detail || j.job || JSON.stringify(j))}</li>`
+      ).join('')}</ul>`;
+  body.innerHTML = `
+    <div class="section-title" style="margin-bottom:8px">Failed Jobs</div>
+    ${listHtml}
+    <div class="section-title" style="margin:18px 0 10px">Recovery Actions</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-outline" id="rec-sync" style="justify-content:flex-start">Destinationdan sinxronlashtirish</button>
+      <button class="btn btn-outline" id="rec-drop-pending" style="justify-content:flex-start">Kutayotgan paketlarni tozalash</button>
+      <div class="field" style="margin:0">
+        <label>Jadval / resource nomi</label>
+        <input id="rec-resource" placeholder="masalan items" />
+        <div class="field-hint">Qayta o'rnatishdan oldin nomni yozing</div>
+      </div>
+      <button class="btn btn-danger" id="rec-drop-resource" disabled style="justify-content:flex-start">Jadvalni qayta o'rnatish</button>
+    </div>`;
+  foot.innerHTML = `<button class="btn btn-outline" id="recover-close2">Yopish</button>`;
+  document.getElementById('recover-close2').onclick = () => { recoverPipeline = null; closeDrawer(); };
+  const resInput = document.getElementById('rec-resource');
+  const dropBtn = document.getElementById('rec-drop-resource');
+  resInput.oninput = () => { dropBtn.disabled = !resInput.value.trim(); };
+  document.getElementById('rec-sync').onclick = () => doRecover('sync', null);
+  document.getElementById('rec-drop-pending').onclick = () => doRecover('drop-pending', null);
+  dropBtn.onclick = () => {
+    const r = resInput.value.trim();
+    if (!r) return;
+    doRecover('drop-resource', r);
+  };
+}
+
+async function doRecover(action, resource) {
+  if (!recoverPipeline) return;
+  const confirms = {
+    'sync': 'This will sync pipeline state from destination. Continue?',
+    'drop-pending': 'This will clear pending packages. Continue?',
+    'drop-resource': 'This will drop resource "' + resource + '". Continue?',
+  };
+  if (!confirm(confirms[action] || 'Continue?')) return;
+  let path = '/api/pipelines/' + encodeURIComponent(recoverPipeline) + '/recover/' + action;
+  if (action === 'drop-resource' && resource) {
+    path += '?resource=' + encodeURIComponent(resource);
+  }
+  try {
+    const r = await api(path, {method: 'POST'});
+    const msg = (r && (r.detail || r.status)) || 'OK';
+    toast(typeof msg === 'string' ? msg : JSON.stringify(msg), 'ok');
+  } catch (e) {
+    toast(e.message, 'err');
+  }
+}
+
 loadAll();
 </script>
 </body>
 </html>
+

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 import uuid
@@ -50,10 +51,20 @@ register_builtin_connectors()
 
 log = logging.getLogger("uzpipe.api")
 
+
+def _cors_origins() -> list[str]:
+    raw = os.environ.get("UZPIPE_CORS_ORIGINS", "").strip()
+    if not raw:
+        return ["http://127.0.0.1:8000", "http://localhost:8000"]
+    if raw == "*":
+        return ["*"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
 app = FastAPI(title="UzPipe", version="0.1.0", docs_url="/api/docs")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:8000", "http://localhost:8000"],
+    allow_origins=_cors_origins(),
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
@@ -144,7 +155,20 @@ class RunResponse(BaseModel):
 _RUN_JOBS: dict[str, dict[str, Any]] = {}
 
 
+def _cleanup_old_run_jobs() -> None:
+    """Lazy sweep: drop finished async jobs older than 1 hour."""
+    cutoff = time.time() - 3600
+    stale = [
+        jid
+        for jid, j in list(_RUN_JOBS.items())
+        if j.get("finished_at") is not None and j["finished_at"] < cutoff
+    ]
+    for jid in stale:
+        _RUN_JOBS.pop(jid, None)
+
+
 def _execute_run_job(job_id: str, name: str) -> None:
+    _cleanup_old_run_jobs()
     job = _RUN_JOBS[job_id]
     job["status"] = "running"
     try:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
@@ -12,6 +13,8 @@ from uzpipe.connectors.base import BaseUZConnector, registry
 from uzpipe.core.config import PipelineConfig
 from uzpipe.core.quality import QualityReport, run_quality_checks
 from uzpipe.store.control_store import ControlStore, StoredPipeline
+
+log = logging.getLogger("uzpipe.pipeline_runner")
 
 
 @dataclass
@@ -80,7 +83,7 @@ def run_pipeline_by_name(name: str, store: ControlStore | None = None) -> RunRes
             duration_seconds=result.duration_seconds,
         )
     except Exception:
-        pass
+        log.exception("notify_failed pipeline=%s", name)
     return result
 
 
