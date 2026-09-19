@@ -1,22 +1,26 @@
-# Status — MVP v1 + volume demo
+# Status — V1 hardening (P0 + P1)
 
-**Verified:** 2026-09-18
+**Verified:** 2026-09-19
 
 ## Tests
-- **55 passed**
+- **76 passed** (`PYTHONPATH=src python -m pytest tests/ -q`)
 
-## New (time-to-value)
-- **Volume demo** connector (`synthetic_volume`) — 10k…1M local rows
-- **1-click** `POST /api/demo/volume?row_count=100000` + UI button
-- Run metrics: **duration_seconds**, **total_rows**, **rows_per_second**
-- Verified: 50,000 rows → DuckDB in ~9.3s (~5.3k rows/s)
+## P0 done
+- API key auth (`X-API-Key` / Bearer); `/api/health` open
+- No silent secret move from `source_params` → 422
+- FastAPI coverage: `tests/test_api.py`, `tests/test_api_auth.py`
 
-## Stack
-- Connectors: synthetic_volume, PostgreSQL, MySQL, REST, SQL Database, Click, Payme, Uzum
-- Destinations, scheduler, RunStore, Docker, skills/docs
+## P1 done
+- Telegram notify (global bot token in settings)
+- Recovery helpers + `/api/pipelines/{name}/failed-jobs` + recover actions
+- `merge` requires `primary_key` at save time
+- Scheduler startup failures logged
 
-## Run
-```bash
-PYTHONPATH=src python -m uvicorn uzpipe.api.app:app --host 127.0.0.1 --port 8000
-# UI: ⚡ Volume demo
-```
+## Docker
+- Bind `127.0.0.1:8000`
+- See README Security section
+
+## Still open (P2)
+- Shared HTTP retry helper across UZ connectors
+- Broader docs stale cleanup (ROADMAP/POSITIONING/dashboard.md/quality)
+- P1.2 recovery test still weak (no forced failed-job assert)
