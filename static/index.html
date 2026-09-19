@@ -82,6 +82,10 @@ tbody tr:hover{background:var(--surface-2)}
 .stat-lbl{font-size:12px;color:var(--faint);margin-top:2px}
 .section{margin-bottom:28px}
 .section-title{font-size:13px;font-weight:600;color:var(--dim);margin-bottom:10px;text-transform:uppercase;letter-spacing:.03em}
+.step-bar{display:flex;gap:6px;margin-bottom:16px}
+.step-seg{flex:1;height:3px;border-radius:99px;background:var(--border);transition:background .2s}
+.step-seg.done{background:var(--accent)}
+.step-label{font-size:11.5px;color:var(--faint);margin-bottom:12px}
 </style>
 </head>
 <body>
@@ -133,10 +137,23 @@ let telegramCfg = {configured:false};
 let page = 'pipelines';
 let selectedConnector = null;
 let step = 1;
-let draft = {};  // step-2 field values survive back/next re-renders
+let draft = {};  // field values survive back/next re-renders
 let editingName = null;  // non-null when editing an existing pipeline
+let testState = 'idle';  // idle | ok | fail — SQL inspect gate for step 2→3
+let inspectedTables = [];  // last successful SQL inspect result
 let pollTimers = {};
 let recoverPipeline = null;
+
+function isSqlConnector(key) {
+  return ['sql_database', 'postgresql', 'mysql'].includes(key);
+}
+
+function stepBarHtml(n, total) {
+  const segs = Array.from({length: total}, (_, i) =>
+    `<div class="step-seg ${i + 1 <= n ? 'done' : ''}"></div>`).join('');
+  return `<div class="step-bar">${segs}</div>
+    <div class="step-label">Qadam ${n} / ${total}</div>`;
+}
 
 function connectorLabel(key) {
   const m = connectors.find(x => x.key === key);
@@ -287,6 +304,8 @@ function renderConnectors() {
     selectedConnector = b.dataset.ck;
     draft = {};
     editingName = null;
+    testState = 'idle';
+    inspectedTables = [];
     step = 2;
     document.getElementById('drawer-title').textContent = 'Yangi pipeline';
     renderDrawer();
@@ -591,6 +610,8 @@ async function startAdd() {
   selectedConnector = null;
   draft = {};
   editingName = null;
+  testState = 'idle';
+  inspectedTables = [];
   document.getElementById('drawer-title').textContent = 'Yangi pipeline';
   renderDrawer();
   openDrawer();
@@ -630,6 +651,9 @@ async function startEdit(name) {
     draft['f-tg-chat'] = n.telegram_chat_id || '';
     draft['f-n-fail'] = n.on_failure !== false;
     draft['f-n-ok'] = !!n.on_success;
+    // Edit: allow proceeding without re-test if tables already configured
+    testState = isSqlConnector(selectedConnector) && (sp.table_names || '').trim() ? 'ok' : 'idle';
+    inspectedTables = [];
     step = 2;
     document.getElementById('drawer-title').textContent = 'Tahrirlash: ' + name;
     renderDrawer();
@@ -641,8 +665,14 @@ async function startEdit(name) {
 
 function captureDraft() {
   document.querySelectorAll('#drawer-body [id^="f-"]').forEach(el => {
-    if (el.type === 'checkbox') draft[el.id] = el.checked;
-    else draft[el.id] = el.value;
+    if (el.type === 'checkbox') {
+      draft[el.id] = el.checked;
+    } else if (el.type === 'password') {
+      // Don't wipe a previously typed secret with an empty re-rendered input
+      if (el.value) draft[el.id] = el.value;
+    } else {
+      draft[el.id] = el.value;
+    }
   });
 }
 
@@ -655,44 +685,189 @@ function renderDrawer() {
   captureDraft();
   const body = document.getElementById('drawer-body');
   const foot = document.getElementById('drawer-foot');
-  if (step === 1) {
-    const list = sortedConnectors();
-    body.innerHTML = `<div style="font-size:11.5px;font-weight:550;color:var(--faint);margin-bottom:10px;text-transform:uppercase">Connector tanlang</div>
+  if (step === 1) return renderStepConnector(body, foot);
+  if (step === 2) return renderStepConnection(body, foot);
+  if (step === 3) return renderStepTables(body, foot);
+  return renderStepDestAndSave(body, foot);
+}
+
+function renderStepConnector(body, foot) {
+  const list = sortedConnectors();
+  body.innerHTML = stepBarHtml(1, 4) +
+    `<div style="font-size:11.5px;font-weight:550;color:var(--faint);margin-bottom:10px;text-transform:uppercase">Connector tanlang</div>
       <div class="cards">${list.map(x => `
         <button class="card ${selectedConnector===x.key?'selected':''}" data-ck="${x.key}">
           <div class="card-title">${x.label}</div>
           <div class="card-desc">${x.description||''}</div>
         </button>`).join('')}</div>`;
-    body.querySelectorAll('[data-ck]').forEach(b => b.onclick = () => {
-      if (selectedConnector !== b.dataset.ck) draft = {};
-      selectedConnector = b.dataset.ck;
-      editingName = null;
-      renderDrawer();
-    });
-    foot.innerHTML = `<button class="btn btn-primary" id="next1" ${selectedConnector?'':'disabled'}>Keyingi</button>`;
-    const n = document.getElementById('next1');
-    if (n) n.onclick = () => { step = 2; renderDrawer(); };
-    return;
-  }
+  body.querySelectorAll('[data-ck]').forEach(b => b.onclick = () => {
+    if (selectedConnector !== b.dataset.ck) {
+      draft = {};
+      testState = 'idle';
+      inspectedTables = [];
+    }
+    selectedConnector = b.dataset.ck;
+    editingName = null;
+    renderDrawer();
+  });
+  foot.innerHTML = `<button class="btn btn-primary" id="next1" ${selectedConnector?'':'disabled'}>Keyingi</button>`;
+  const n = document.getElementById('next1');
+  if (n) n.onclick = () => { step = 2; renderDrawer(); };
+}
+
+function renderStepConnection(body, foot) {
   const m = connectors.find(x => x.key === selectedConnector);
+  const isSql = isSqlConnector(selectedConnector);
+  // Credential / connection fields only (secrets + connection_string + base_url-style)
+  const connFields = (m?.fields || []).filter(f =>
+    f.secret || f.key === 'connection_string' || f.key === 'base_url'
+  );
+  // If non-SQL has no secret/base_url, show all fields here except table-like ones
+  const fieldsToShow = connFields.length
+    ? connFields
+    : (m?.fields || []).filter(f => !['table_names', 'cursor_column', 'resources'].includes(f.key));
+
+  let statusHtml = '';
+  if (isSql) {
+    if (testState === 'ok') {
+      statusHtml = `<div class="field-hint" style="color:var(--green);margin-top:8px">✓ Ulanish tasdiqlandi${inspectedTables.length ? ' — ' + inspectedTables.length + ' jadval' : ''}</div>`;
+    } else if (testState === 'fail') {
+      statusHtml = `<div class="field-hint" style="color:var(--red);margin-top:8px">Ulanish muvaffaqiyatsiz — qayta urinib ko'ring</div>`;
+    }
+  }
+
+  body.innerHTML = stepBarHtml(2, 4) + `
+    <div class="field"><label>Pipeline nomi</label>
+      <input id="f-name" placeholder="masalan postgres_orders" value="${esc(dv('f-name',''))}" ${editingName ? 'readonly' : ''} />
+      <div class="field-hint">${editingName ? "Nom o'zgartirilmaydi (tahrirlash)" : 'Faqat harf, raqam, _ va -'}</div></div>
+    ${fieldsToShow.map(f => fieldHtml(f, false)).join('')}
+    ${isSql ? `<div class="field" id="sql-inspect-wrap">
+      <button type="button" class="btn btn-outline" id="btn-inspect" style="width:100%">Ulanishni tekshirish</button>
+      <div class="field-hint">Keyingi qadamga o'tishdan oldin ulanishni tekshiring</div>
+      ${statusHtml}
+    </div>` : ''}
+  `;
+  const canNext = isSql ? (testState === 'ok') : true;
+  foot.innerHTML = `
+    <button class="btn btn-outline" id="back2">Orqaga</button>
+    <button class="btn btn-primary" id="next2" ${canNext ? '' : 'disabled'}>Keyingi</button>`;
+  document.getElementById('back2').onclick = () => { step = 1; renderDrawer(); };
+  document.getElementById('next2').onclick = () => {
+    const name = (document.getElementById('f-name') || {}).value || '';
+    if (!name.trim()) { toast('Pipeline nomi majburiy', 'err'); return; }
+    if (isSql && testState !== 'ok') { toast("Avval ulanishni tekshiring", 'err'); return; }
+    step = 3;
+    renderDrawer();
+  };
+  const btnInspect = document.getElementById('btn-inspect');
+  if (btnInspect) btnInspect.onclick = runSqlInspect;
+  // Changing connection invalidates prior test
+  const connEl = document.getElementById('f-connection_string');
+  if (connEl) {
+    connEl.addEventListener('input', () => {
+      if (testState === 'ok') {
+        testState = 'idle';
+        inspectedTables = [];
+        const n2 = document.getElementById('next2');
+        if (n2) n2.disabled = true;
+      }
+    });
+  }
+}
+
+function renderStepTables(body, foot) {
+  const m = connectors.find(x => x.key === selectedConnector);
+  const isSql = isSqlConnector(selectedConnector);
+  const resourceKeys = new Set(['table_names', 'cursor_column', 'resources', 'endpoint', 'from_days_ago']);
+  const resourceFields = (m?.fields || []).filter(f =>
+    resourceKeys.has(f.key) || (!f.secret && f.key !== 'connection_string' && f.key !== 'base_url')
+  );
+  // Avoid duplicating fields already shown on step 2
+  const step2Keys = new Set(
+    (m?.fields || [])
+      .filter(f => f.secret || f.key === 'connection_string' || f.key === 'base_url')
+      .map(f => f.key)
+  );
+  const fields = resourceFields.filter(f => !step2Keys.has(f.key));
+
+  let tablesBlock = '';
+  if (isSql) {
+    const current = new Set(
+      String(dv('f-table_names', '')).split(',').map(s => s.trim()).filter(Boolean)
+    );
+    const tables = inspectedTables.length
+      ? inspectedTables
+      : [...current];
+    tablesBlock = `
+      <div class="field">
+        <label>Jadvallar *</label>
+        <input id="f-table_names" type="hidden" value="${esc(dv('f-table_names',''))}" />
+        <div id="sql-tables">
+          ${tables.length ? tables.map(t =>
+            `<label style="display:flex;align-items:center;gap:8px;margin:4px 0;font-weight:500;color:var(--dim)">
+              <input type="checkbox" class="sql-tbl" value="${esc(t)}" ${current.has(t)?'checked':''}/> ${esc(t)}
+            </label>`
+          ).join('') : `<div class="field-hint">Jadvallar yo'q — orqaga qaytib ulanishni qayta tekshiring yoki nomlarni qo'lda yozing</div>
+            <input id="f-table_names_manual" type="text" placeholder="orders, customers" value="${esc(dv('f-table_names',''))}" />`}
+        </div>
+        <div class="field-hint">Kerakli jadvallarni belgilang</div>
+      </div>
+      ${fields.filter(f => f.key === 'cursor_column').map(f => fieldHtml(f, false)).join('')}`;
+  } else {
+    tablesBlock = fields.map(f => fieldHtml(f, false)).join('') ||
+      `<div class="field-hint">Ushbu connector uchun qo'shimcha resource maydoni yo'q</div>`;
+  }
+
+  body.innerHTML = stepBarHtml(3, 4) + tablesBlock;
+  foot.innerHTML = `
+    <button class="btn btn-outline" id="back3">Orqaga</button>
+    <button class="btn btn-primary" id="next3">Keyingi</button>`;
+  document.getElementById('back3').onclick = () => { step = 2; renderDrawer(); };
+  document.getElementById('next3').onclick = () => {
+    if (isSql) {
+      const box = document.getElementById('sql-tables');
+      let selected = [];
+      if (box) {
+        selected = [...box.querySelectorAll('.sql-tbl:checked')].map(x => x.value);
+      }
+      const manual = document.getElementById('f-table_names_manual');
+      if (manual && manual.value.trim()) {
+        selected = manual.value.split(',').map(s => s.trim()).filter(Boolean);
+      }
+      if (!selected.length) {
+        toast('Kamida bitta jadval tanlang', 'err');
+        return;
+      }
+      draft['f-table_names'] = selected.join(', ');
+      const hidden = document.getElementById('f-table_names');
+      if (hidden) hidden.value = draft['f-table_names'];
+    }
+    step = 4;
+    renderDrawer();
+  };
+  const box = document.getElementById('sql-tables');
+  if (box) {
+    box.querySelectorAll('.sql-tbl').forEach(cb => {
+      cb.onchange = () => {
+        const selected = [...box.querySelectorAll('.sql-tbl:checked')].map(x => x.value);
+        draft['f-table_names'] = selected.join(', ');
+        const tn = document.getElementById('f-table_names');
+        if (tn) tn.value = draft['f-table_names'];
+      };
+    });
+  }
+}
+
+function renderStepDestAndSave(body, foot) {
   const destOpts = (destinations.length ? destinations : [{key:'duckdb',label:'DuckDB',needs_connection:false}])
     .map(d => `<option value="${d.key}" data-needs="${d.needs_connection?1:0}" ${dv('f-dest','duckdb')===d.key?'selected':''}>${d.label}</option>`).join('');
   const savedOpts = (savedDestinations||[]).map(s =>
     `<option value="${esc(s.id)}" ${dv('f-saved-dest','')===s.id?'selected':''}>${esc(s.label)} (${esc(s.connector)})</option>`).join('');
-  const isSql = ['sql_database','postgresql','mysql'].includes(selectedConnector);
   const destModeVal = dv('f-dest-mode', 'new');
   const wdVal = dv('f-wd', 'replace');
   const schedKindVal = dv('f-sched-kind', 'manual');
-  body.innerHTML = `
-    <div class="field"><label>Pipeline nomi</label>
-      <input id="f-name" placeholder="masalan postgres_orders" value="${esc(dv('f-name',''))}" ${editingName ? 'readonly' : ''} />
-      <div class="field-hint">${editingName ? 'Nom o\'zgartirilmaydi (tahrirlash)' : 'Faqat harf, raqam, _ va -'}</div></div>
-    ${(m?.fields||[]).map(f => fieldHtml(f, isSql)).join('')}
-    ${isSql ? `<div class="field" id="sql-inspect-wrap">
-      <button type="button" class="btn btn-outline" id="btn-inspect" style="width:100%">Ulanishni tekshirish</button>
-      <div class="field-hint">Connection string kiritib, jadvallarni ro'yxatdan tanlang</div>
-      <div id="sql-tables" style="margin-top:8px"></div>
-    </div>` : ''}
+
+  body.innerHTML = stepBarHtml(4, 4) + `
     <div class="field"><label>Destination manbai</label>
       <select id="f-dest-mode">
         <option value="new" ${destModeVal==='new'?'selected':''}>Yangi destination</option>
@@ -775,9 +950,9 @@ function renderDrawer() {
     </div>
   `;
   foot.innerHTML = `
-    <button class="btn btn-outline" id="back2">Orqaga</button>
+    <button class="btn btn-outline" id="back4">Orqaga</button>
     <button class="btn btn-primary" id="save2">${editingName ? 'Yangilash' : 'Saqlash'}</button>`;
-  document.getElementById('back2').onclick = () => { step = 1; renderDrawer(); };
+  document.getElementById('back4').onclick = () => { step = 3; renderDrawer(); };
   document.getElementById('save2').onclick = savePipeline;
   const gotoTg = document.getElementById('goto-telegram-settings');
   if (gotoTg) {
@@ -821,15 +996,12 @@ function renderDrawer() {
       document.getElementById('save-dest-label-wrap').style.display = 'block';
     }
   }
-  const btnInspect = document.getElementById('btn-inspect');
-  if (btnInspect) btnInspect.onclick = runSqlInspect;
   const sk = document.getElementById('f-sched-kind');
   const syncSched = () => {
     document.getElementById('sched-interval-wrap').style.display =
       sk.value === 'interval' ? 'block' : 'none';
   };
-  sk.onchange = syncSched;
-  syncSched();
+  if (sk) { sk.onchange = syncSched; syncSched(); }
 }
 
 function fieldHtml(f, isSql) {
@@ -842,16 +1014,17 @@ function fieldHtml(f, isSql) {
       </select>
       ${f.help_text?`<div class="field-hint">${esc(f.help_text)}</div>`:''}</div>`;
   }
-  // SQL table_names: keep text input; checkboxes fill it after inspect
   if (isSql && f.key === 'table_names') {
     return `<div class="field"><label>${esc(f.label)}${req}</label>
       <input id="f-${esc(f.key)}" type="text" placeholder="${esc(f.placeholder||'')}" value="${esc(savedVal)}" />
-      <div class="field-hint">Qo'lda yozing yoki pastroqda "Ulanishni tekshirish" orqali tanlang</div></div>`;
+      <div class="field-hint">Qo'lda yozing yoki inspect orqali tanlang</div></div>`;
   }
   const type = f.type === 'password' ? 'password' : (f.type === 'number' ? 'number' : 'text');
-  const ph = (f.type === 'password' && editingName)
-    ? "Bo'sh qoldiring — o'zgarmaydi"
-    : (f.placeholder || '');
+  let ph = f.placeholder || '';
+  if (f.type === 'password') {
+    if (editingName && !draft['f-' + f.key]) ph = "Bo'sh qoldiring — o'zgarmaydi";
+    else if (draft['f-' + f.key]) ph = "•••••••• (saqlangan, o'zgartirish uchun yozing)";
+  }
   return `<div class="field"><label>${esc(f.label)}${req}</label>
     <input id="f-${esc(f.key)}" type="${type}" placeholder="${esc(ph)}" value="${esc(f.type==='password'?'':savedVal)}" />
     ${f.help_text?`<div class="field-hint">${esc(f.help_text)}</div>`:''}</div>`;
@@ -859,54 +1032,49 @@ function fieldHtml(f, isSql) {
 
 async function runSqlInspect() {
   const el = document.getElementById('f-connection_string');
-  const conn = el ? el.value.trim() : '';
+  const conn = el ? el.value.trim() : (draft['f-connection_string'] || '');
   if (!conn) { toast('Connection string kiriting', 'err'); return; }
-  const box = document.getElementById('sql-tables');
-  if (box) box.innerHTML = '<div class="field-hint">Tekshirilmoqda…</div>';
+  // Keep password in draft even though input value may be empty after re-render
+  if (el && el.value) draft['f-connection_string'] = el.value;
+  const btn = document.getElementById('btn-inspect');
+  if (btn) { btn.disabled = true; btn.textContent = 'Tekshirilmoqda…'; }
+  testState = 'idle';
   try {
     const res = await api('/api/connectors/sql_database/inspect', {
       method: 'POST',
       body: JSON.stringify({connection_string: conn}),
     });
     const tables = res.tables || [];
-    if (!tables.length) {
-      if (box) box.innerHTML = '<div class="field-hint">Jadvallar topilmadi</div>';
-      return;
-    }
-    const current = new Set(
-      ((document.getElementById('f-table_names')||{}).value || '')
-        .split(',').map(s => s.trim()).filter(Boolean)
-    );
-    if (box) {
-      box.innerHTML = `<div style="font-size:12px;color:var(--dim);margin-bottom:6px">${tables.length} jadval</div>` +
-        tables.map(t => `<label style="display:flex;align-items:center;gap:8px;margin:4px 0;font-weight:500;color:var(--dim)">
-          <input type="checkbox" class="sql-tbl" value="${esc(t)}" ${current.has(t)?'checked':''}/> ${esc(t)}
-        </label>`).join('');
-      box.querySelectorAll('.sql-tbl').forEach(cb => {
-        cb.onchange = () => {
-          const selected = [...box.querySelectorAll('.sql-tbl:checked')].map(x => x.value);
-          const tn = document.getElementById('f-table_names');
-          if (tn) tn.value = selected.join(', ');
-        };
-      });
-    }
-    toast(tables.length + ' jadval topildi');
+    inspectedTables = tables;
+    testState = 'ok';
+    toast(tables.length ? (tables.length + ' jadval topildi') : 'Ulanish OK (jadval yo\'q)');
+    // Re-render step 2 so Keyingi enables and status shows
+    renderDrawer();
   } catch (e) {
-    if (box) box.innerHTML = '';
+    testState = 'fail';
+    inspectedTables = [];
     toast(e.message, 'err');
+    if (btn) { btn.disabled = false; btn.textContent = 'Ulanishni tekshirish'; }
+    // Soft refresh status without full wipe of typed password
+    renderDrawer();
   }
 }
 
 async function savePipeline() {
+  captureDraft();
   const m = connectors.find(x => x.key === selectedConnector);
-  const name = document.getElementById('f-name').value.trim();
+  const name = (dv('f-name', '') || '').toString().trim()
+    || ((document.getElementById('f-name') || {}).value || '').trim();
   if (!name) { toast('Nom majburiy', 'err'); return; }
   const source_params = {};
   const secrets = {};
   for (const f of (m?.fields || [])) {
     const el = document.getElementById('f-' + f.key);
-    if (!el) continue;
-    const v = el.value;
+    let v = el ? el.value : '';
+    // Prefer draft for secrets / fields from earlier steps (not in current DOM)
+    if (draft['f-' + f.key] !== undefined && draft['f-' + f.key] !== null && draft['f-' + f.key] !== '') {
+      if (!el || el.type === 'password' || !el.value) v = draft['f-' + f.key];
+    }
     if (f.secret) secrets[f.key] = v;
     else source_params[f.key] = v;
   }
