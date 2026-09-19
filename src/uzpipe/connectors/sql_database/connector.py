@@ -66,15 +66,42 @@ def _sql_fields(
     ]
 
 
+def _preflight_sqlite(credentials: str) -> None:
+    """Fail fast with a clear message before dlt/SQLAlchemy stack traces."""
+    from pathlib import Path
+
+    from sqlalchemy.engine.url import make_url
+
+    from uzpipe.core.demo_data import friendly_db_error
+
+    cred = (credentials or "").strip()
+    if not cred.lower().startswith("sqlite"):
+        return
+    try:
+        url = make_url(cred)
+        db_path = url.database
+    except Exception:
+        return
+    if not db_path or db_path == ":memory:":
+        return
+    path = Path(db_path)
+    if not path.is_file():
+        raise ValueError(
+            friendly_db_error(Exception(f"unable to open database file: {path}"))
+        )
+
+
 def _build_sql_database_source(
     params: dict[str, Any], secrets: dict[str, str]
 ) -> Any:
     """Barcha SQL connectorlar uchun yagona dlt chaqiruvi."""
     table_names = [t.strip() for t in params["table_names"].split(",") if t.strip()]
     cursor_column = params.get("cursor_column") or None
+    credentials = secrets["connection_string"]
+    _preflight_sqlite(credentials)
 
     kwargs: dict[str, Any] = {
-        "credentials": secrets["connection_string"],
+        "credentials": credentials,
         "table_names": table_names,
     }
     if cursor_column:
@@ -157,9 +184,10 @@ SQL_DATABASE_MANIFEST = ConnectorManifest(
     description="SQLite, MSSQL, Oracle va boshqa SQLAlchemy URL'lar",
     dlt_source_factory="uzpipe.connectors.sql_database.connector.SqlDatabaseConnector",
     fields=_sql_fields(
-        connection_placeholder="sqlite:///path/to/db.sqlite",
+        connection_placeholder="sqlite:////home/user/data/orders.db",
         connection_help=(
-            "Istalgan SQLAlchemy connection string. "
+            "SQLite: to'liq yo'l (sqlite:////abs/path.db). "
+            "Relative path ishonchsiz. Yoki Settings → Namuna SQL. "
             "PostgreSQL/MySQL uchun alohida kartochkalarni afzal ko'ring."
         ),
     ),

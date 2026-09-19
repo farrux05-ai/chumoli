@@ -285,7 +285,17 @@ function renderPipelines() {
       </div>
       <button class="btn btn-primary" id="btn-add">+ Yangi pipeline</button>
     </div>
-    ${pipelines.length === 0 ? `<div class="empty"><div style="font-weight:550;color:var(--dim);margin-bottom:4px">Hali pipeline yo'q</div>PostgreSQL, MySQL, REST API yoki UZ connectorlar orqali qo'shing</div>` : `
+    ${pipelines.length === 0 ? `<div class="empty">
+      <div style="font-weight:550;color:var(--dim);margin-bottom:8px">Hali pipeline yo'q</div>
+      <div style="margin-bottom:16px;max-width:420px;margin-left:auto;margin-right:auto;line-height:1.45">
+        Birinchi yuklashni 1 daqiqada sinab ko'ring — qator soni va tezlik ko'rinadi.
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-primary" id="btn-demo-sql">Namuna SQL → DuckDB</button>
+        <button class="btn btn-outline" id="btn-demo-rest">REST API → DuckDB</button>
+        <button class="btn btn-outline" id="btn-add-empty">+ O'zingiz yarating</button>
+      </div>
+    </div>` : `
     <div class="table-wrap"><table>
       <thead><tr><th>Nom</th><th>Connector</th><th>Oxirgi run</th><th>Qatorlar</th><th>Vaqt</th><th></th></tr></thead>
       <tbody>${pipelines.map(p => {
@@ -308,9 +318,44 @@ function renderPipelines() {
     </table></div>`}`;
   const add = document.getElementById('btn-add');
   if (add) add.onclick = startAdd;
+  const addEmpty = document.getElementById('btn-add-empty');
+  if (addEmpty) addEmpty.onclick = startAdd;
+  const ds = document.getElementById('btn-demo-sql');
+  if (ds) ds.onclick = () => runDemo('sql', ds);
+  const dr = document.getElementById('btn-demo-rest');
+  if (dr) dr.onclick = () => runDemo('rest', dr);
   c.querySelectorAll('[data-run]').forEach(b => b.onclick = () => runPipeline(b.dataset.run, b));
   c.querySelectorAll('[data-del]').forEach(b => b.onclick = () => delPipeline(b.dataset.del));
   c.querySelectorAll('[data-recover]').forEach(b => b.onclick = () => openRecover(b.dataset.recover));
+}
+
+async function runDemo(kind, btn) {
+  const label = kind === 'sql' ? 'Namuna SQL' : (kind === 'rest' ? 'REST demo' : 'Volume');
+  const path = kind === 'sql' ? '/api/demo/sql' : (kind === 'rest' ? '/api/demo/rest' : '/api/demo/volume');
+  btn.disabled = true;
+  const prev = btn.textContent;
+  btn.textContent = 'Yuklanmoqda…';
+  try {
+    const r = await api(path, {method: 'POST'});
+    const rows = r.total_rows != null ? r.total_rows : '—';
+    const rps = r.rows_per_second != null ? r.rows_per_second : '—';
+    const sec = r.duration_seconds != null ? r.duration_seconds : '—';
+    const parts = r.row_counts
+      ? Object.entries(r.row_counts).map(([t,n]) => t + ': ' + n).join(', ')
+      : '';
+    toast(
+      (r.success ? '✓ ' : '✗ ') + label + ' — ' + rows + ' qator · ' + sec + 's · ' + rps + ' q/s'
+      + (parts ? ' (' + parts + ')' : ''),
+      r.success ? 'ok' : 'err'
+    );
+    pipelines = await api('/api/pipelines');
+    renderPipelines();
+  } catch (e) {
+    toast(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prev;
+  }
 }
 
 async function renderRuns() {
@@ -384,13 +429,17 @@ async function renderSettings() {
       <button class="btn btn-primary" id="tg-save">Saqlash</button>
     </div>
     <div class="section">
-      <div class="section-title">Demo volume</div>
-      <p style="color:var(--dim);margin-bottom:12px">Synthetic yuklama — API <span class="mono">POST /api/demo/volume</span></p>
+      <div class="section-title">Birinchi yuklash (demo)</div>
+      <p style="color:var(--dim);margin-bottom:12px">Ishqalansiz: qator soni va tezlik darhol ko'rinadi</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        <button class="btn btn-primary" id="demo-sql">Namuna SQL → DuckDB</button>
+        <button class="btn btn-outline" id="demo-rest">REST API → DuckDB</button>
+      </div>
       <div class="field" style="max-width:200px">
-        <label>Qatorlar soni</label>
+        <label>Synthetic volume (qatorlar)</label>
         <input id="demo-rows" type="number" min="1000" max="1000000" value="100000" />
       </div>
-      <button class="btn btn-outline" id="demo-run">Demo ishga tushirish</button>
+      <button class="btn btn-outline" id="demo-run">Volume demo</button>
     </div>`;
   document.getElementById('sched-start').onclick = async () => {
     try { scheduler = await api('/api/scheduler/start', {method:'POST'}); toast('Scheduler ishga tushdi'); renderSettings(); }
@@ -414,16 +463,20 @@ async function renderSettings() {
       renderSettings();
     } catch(e){ toast(e.message,'err'); }
   };
+  document.getElementById('demo-sql').onclick = (e) => runDemo('sql', e.target);
+  document.getElementById('demo-rest').onclick = (e) => runDemo('rest', e.target);
   document.getElementById('demo-run').onclick = async () => {
     const btn = document.getElementById('demo-run');
     const n = parseInt(document.getElementById('demo-rows').value, 10) || 100000;
     btn.disabled = true;
+    const prev = btn.textContent;
     btn.textContent = '…';
     try {
       const r = await api('/api/demo/volume?row_count=' + encodeURIComponent(n), {method:'POST'});
-      toast('Demo: ' + (r.total_rows ?? n) + ' qator · ' + (r.rows_per_second ?? '—') + ' r/s', r.success ? 'ok' : 'err');
+      toast('Volume: ' + (r.total_rows ?? n) + ' qator · ' + (r.duration_seconds ?? '—') + 's · ' + (r.rows_per_second ?? '—') + ' q/s', r.success ? 'ok' : 'err');
+      pipelines = await api('/api/pipelines');
     } catch(e){ toast(e.message,'err'); }
-    finally { btn.disabled = false; btn.textContent = 'Demo ishga tushirish'; }
+    finally { btn.disabled = false; btn.textContent = prev; }
   };
 }
 

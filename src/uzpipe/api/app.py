@@ -205,7 +205,12 @@ def _execute_run_job(job_id: str, name: str) -> None:
     except Exception as e:
         log.exception("run_job_failed pipeline=%s job=%s", name, job_id)
         job["status"] = "error"
-        job["error"] = str(e)
+        try:
+            from uzpipe.core.demo_data import friendly_db_error
+
+            job["error"] = friendly_db_error(e)
+        except Exception:
+            job["error"] = str(e)
     finally:
         job["finished_at"] = time.time()
 
@@ -435,24 +440,7 @@ def run_pipeline(name: str) -> RunResponse:
     )
 
 
-@app.post("/api/demo/volume", dependencies=[Depends(require_api_key)])
-def demo_volume(row_count: int = 100000) -> dict[str, Any]:
-    register_builtin_connectors()
-    row_count = max(1000, min(int(row_count), 1_000_000))
-    name = "demo_volume"
-    manifest = registry.get_manifest("synthetic_volume")
-    duck_path = str(Path("/tmp") / "uzpipe_volume_demo.duckdb")
-    config = PipelineConfig(
-        name=name,
-        connector_key="synthetic_volume",
-        source_params={"row_count": str(row_count), "batch_label": "wow"},
-        destination=DestinationConfig(
-            connector="duckdb", connection=duck_path, dataset_name="demo"
-        ),
-        write_disposition=WriteDisposition.REPLACE,
-    )
-    _store().save(config, {}, manifest)
-    result = run_pipeline_by_name(name, store=_store())
+def _record_and_demo_response(result: Any, duck_path: str, *, label: str) -> dict[str, Any]:
     details = [{"passed": o.passed, "detail": o.detail} for o in result.quality_report.outcomes]
     try:
         _runs().record(
@@ -473,11 +461,99 @@ def demo_volume(row_count: int = 100000) -> dict[str, Any]:
         "success": result.success,
         "row_counts": result.row_counts,
         "total_rows": result.total_rows,
-        "duration_seconds": result.duration_seconds,
+        "duration_seconds": round(result.duration_seconds, 3),
         "rows_per_second": round(result.rows_per_second, 1),
         "destination": duck_path,
         "quality_passed": result.quality_report.all_passed,
+        "label": label,
     }
+
+
+@app.post("/api/demo/volume", dependencies=[Depends(require_api_key)])
+def demo_volume(row_count: int = 100000) -> dict[str, Any]:
+    register_builtin_connectors()
+    row_count = max(1000, min(int(row_count), 1_000_000))
+    name = "demo_volume"
+    manifest = registry.get_manifest("synthetic_volume")
+    duck_path = str(Path("/tmp") / "uzpipe_volume_demo.duckdb")
+    config = PipelineConfig(
+        name=name,
+        connector_key="synthetic_volume",
+        source_params={"row_count": str(row_count), "batch_label": "wow"},
+        destination=DestinationConfig(
+            connector="duckdb", connection=duck_path, dataset_name="demo"
+        ),
+        write_disposition=WriteDisposition.REPLACE,
+    )
+    _store().save(config, {}, manifest)
+    result = run_pipeline_by_name(name, store=_store())
+    return _record_and_demo_response(result, duck_path, label="Synthetic volume")
+
+
+@app.post("/api/demo/sql", dependencies=[Depends(require_api_key)])
+def demo_sql() -> dict[str, Any]:
+    """Namuna SQLite (orders+customers) → local DuckDB. Birinchi yuklash ishqalansiz."""
+    from uzpipe.core.demo_data import sample_sqlite_path, sample_sqlite_url
+
+    register_builtin_connectors()
+    sample_sqlite_path()  # ensure file exists
+    name = "demo_sql_orders"
+    manifest = registry.get_manifest("sql_database")
+    duck_path = str(Path.home() / ".uzpipe" / "examples" / "demo_sql.duckdb")
+    config = PipelineConfig(
+        name=name,
+        connector_key="sql_database",
+        source_params={"table_names": "orders, customers"},
+        destination=DestinationConfig(
+            connector="duckdb", connection=duck_path, dataset_name="demo"
+        ),
+        write_disposition=WriteDisposition.REPLACE,
+    )
+    _store().save(config, {"connection_string": sample_sqlite_url()}, manifest)
+    try:
+        result = run_pipeline_by_name(name, store=_store())
+    except Exception as e:
+        from uzpipe.core.demo_data import friendly_db_error
+
+        raise HTTPException(500, friendly_db_error(e)) from e
+    out = _record_and_demo_response(result, duck_path, label="SQL → DuckDB (namuna)")
+    out["source"] = sample_sqlite_url()
+    out["tables"] = result.row_counts
+    return out
+
+
+@app.post("/api/demo/rest", dependencies=[Depends(require_api_key)])
+def demo_rest() -> dict[str, Any]:
+    """Ommaviy JSONPlaceholder API → DuckDB (~1 daqiqada)."""
+    register_builtin_connectors()
+    name = "demo_rest_posts"
+    manifest = registry.get_manifest("rest_api")
+    duck_path = str(Path.home() / ".uzpipe" / "examples" / "demo_rest.duckdb")
+    config = PipelineConfig(
+        name=name,
+        connector_key="rest_api",
+        source_params={
+            "base_url": "https://jsonplaceholder.typicode.com",
+            "endpoint": "/posts",
+            "auth_type": "none",
+            "auth_key_name": "Authorization",
+        },
+        destination=DestinationConfig(
+            connector="duckdb", connection=duck_path, dataset_name="demo"
+        ),
+        write_disposition=WriteDisposition.REPLACE,
+    )
+    _store().save(config, {"secret_value": ""}, manifest)
+    try:
+        result = run_pipeline_by_name(name, store=_store())
+    except Exception as e:
+        from uzpipe.core.demo_data import friendly_db_error
+
+        raise HTTPException(500, friendly_db_error(e)) from e
+    out = _record_and_demo_response(result, duck_path, label="REST API → DuckDB")
+    out["source"] = "https://jsonplaceholder.typicode.com/posts"
+    out["tables"] = result.row_counts
+    return out
 
 
 @app.get("/api/runs", dependencies=[Depends(require_api_key)])
