@@ -133,6 +133,7 @@ class CreatePipelineBody(BaseModel):
     destination: DestinationConfig = Field(
         default_factory=lambda: DestinationConfig(connector="duckdb", dataset_name="raw")
     )
+    saved_destination_id: str | None = None
     write_disposition: WriteDisposition = WriteDisposition.REPLACE
     primary_key: list[str] = Field(default_factory=list)
     schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
@@ -275,6 +276,65 @@ def list_destinations() -> list[dict[str, Any]]:
     return all_destinations()
 
 
+class SavedDestinationBody(BaseModel):
+    label: str
+    connector: str
+    connection: str | None = None
+    dataset_name: str = "raw"
+    save_as_new: bool = True  # unused on create; reserved
+
+
+@app.get("/api/destinations/saved", dependencies=[Depends(require_api_key)])
+def list_saved_destinations() -> list[dict[str, Any]]:
+    """Named reusable destinations (no plaintext connection in list)."""
+    return _store().list_saved_destinations()
+
+
+@app.post("/api/destinations/saved", status_code=201, dependencies=[Depends(require_api_key)])
+def create_saved_destination(body: SavedDestinationBody) -> dict[str, str]:
+    dest_spec = get_destination(body.connector)
+    if dest_spec is None:
+        raise HTTPException(400, f"Noma'lum destination: {body.connector}")
+    if dest_spec.needs_connection and not (body.connection or "").strip():
+        raise HTTPException(422, f"{dest_spec.label} uchun connection majburiy")
+    try:
+        dest_id = _store().save_destination(
+            label=body.label,
+            connector=body.connector,
+            connection=body.connection,
+            dataset_name=body.dataset_name or "raw",
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"status": "created", "id": dest_id}
+
+
+@app.delete("/api/destinations/saved/{dest_id}", dependencies=[Depends(require_api_key)])
+def delete_saved_destination(dest_id: str) -> dict[str, str]:
+    ok = _store().delete_saved_destination(dest_id)
+    if not ok:
+        raise HTTPException(404, f"Saved destination '{dest_id}' topilmadi")
+    return {"status": "deleted", "id": dest_id}
+
+
+class SqlInspectBody(BaseModel):
+    connection_string: str
+
+
+@app.post("/api/connectors/sql_database/inspect", dependencies=[Depends(require_api_key)])
+def inspect_sql_database(body: SqlInspectBody) -> dict[str, Any]:
+    """Live DB schema scan — table names only (sql_database / postgresql / mysql)."""
+    from uzpipe.connectors.sql_database.connector import inspect_sql_tables
+
+    try:
+        tables = inspect_sql_tables(body.connection_string)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    except Exception as e:
+        raise HTTPException(500, f"Inspect xatosi: {e}") from e
+    return {"tables": tables, "count": len(tables)}
+
+
 @app.get("/api/connectors", dependencies=[Depends(require_api_key)])
 def list_connectors() -> list[dict[str, Any]]:
     out = []
@@ -356,13 +416,25 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
     if errors:
         raise HTTPException(422, {"validation_errors": errors})
 
-    dest_spec = get_destination(body.destination.connector)
+    dest = body.destination.model_copy()
+    if body.saved_destination_id:
+        saved = _store().get_saved_destination(body.saved_destination_id)
+        if saved is None:
+            raise HTTPException(
+                404, f"Saved destination '{body.saved_destination_id}' topilmadi"
+            )
+        dest = DestinationConfig(
+            connector=saved["connector"],
+            connection=saved.get("connection"),
+            dataset_name=saved.get("dataset_name") or dest.dataset_name or "raw",
+        )
+
+    dest_spec = get_destination(dest.connector)
     if dest_spec is None:
-        raise HTTPException(400, f"Noma'lum destination: {body.destination.connector}")
-    if dest_spec.needs_connection and not (body.destination.connection or "").strip():
+        raise HTTPException(400, f"Noma'lum destination: {dest.connector}")
+    if dest_spec.needs_connection and not (dest.connection or "").strip():
         raise HTTPException(422, f"{dest_spec.label} uchun connection majburiy")
 
-    dest = body.destination.model_copy()
     if dest.connection:
         secrets[DEST_CONNECTION_SECRET_KEY] = dest.connection
         dest.connection = None

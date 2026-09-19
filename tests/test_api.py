@@ -260,3 +260,77 @@ def test_telegram_settings_encrypted_round_trip(api) -> None:
     assert again.json()["configured"] is True
     # token itself never returned
     assert "tok-secret-xyz" not in again.text
+
+
+def test_saved_destinations_crud(api) -> None:
+    c, key, tmp_path = api
+    r = c.get("/api/destinations/saved", headers=_h(key))
+    assert r.status_code == 200
+    assert r.json() == []
+
+    create = c.post(
+        "/api/destinations/saved",
+        headers=_h(key),
+        json={
+            "label": "Prod PG",
+            "connector": "postgresql",
+            "connection": "postgresql://u:secret@h/db",
+            "dataset_name": "wh",
+        },
+    )
+    assert create.status_code == 201
+    dest_id = create.json()["id"]
+
+    listed = c.get("/api/destinations/saved", headers=_h(key)).json()
+    assert len(listed) == 1
+    assert listed[0]["label"] == "Prod PG"
+    assert "connection" not in listed[0]
+    assert "secret" not in create.text.lower()
+
+    # use saved dest when creating pipeline
+    pipe = c.post(
+        "/api/pipelines",
+        headers=_h(key),
+        json={
+            "name": "via_saved",
+            "connector_key": "synthetic_volume",
+            "source_params": {"row_count": "10000", "batch_label": "t"},
+            "secrets": {},
+            "saved_destination_id": dest_id,
+            "destination": {"connector": "duckdb", "dataset_name": "ignored"},
+        },
+    )
+    assert pipe.status_code == 201, pipe.text
+
+    deleted = c.delete(f"/api/destinations/saved/{dest_id}", headers=_h(key))
+    assert deleted.status_code == 200
+    assert c.get("/api/destinations/saved", headers=_h(key)).json() == []
+
+
+def test_sql_inspect_endpoint(api, tmp_path) -> None:
+    from sqlalchemy import create_engine, text
+
+    c, key, _ = api
+    db = tmp_path / "inspect_src.db"
+    eng = create_engine(f"sqlite:///{db}")
+    with eng.begin() as conn:
+        conn.execute(text("CREATE TABLE alpha (id INT)"))
+        conn.execute(text("CREATE TABLE beta (id INT)"))
+    eng.dispose()
+
+    r = c.post(
+        "/api/connectors/sql_database/inspect",
+        headers=_h(key),
+        json={"connection_string": f"sqlite:///{db}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert set(body["tables"]) >= {"alpha", "beta"}
+    assert body["count"] >= 2
+
+    bad = c.post(
+        "/api/connectors/sql_database/inspect",
+        headers=_h(key),
+        json={"connection_string": ""},
+    )
+    assert bad.status_code == 422
