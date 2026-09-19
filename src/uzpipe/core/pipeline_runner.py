@@ -140,41 +140,107 @@ def _load_stored(name: str, store: ControlStore | None = None):
     return store, stored
 
 
+def _uz_step_fail_detail(step_name: str, exception_text: str) -> str:
+    """dlt step failure → qisqa o'zbekcha tavsif.
+
+    dlt ko'pincha multi-line xabar beradi: birinchi qator umumiy
+    'Pipeline execution failed at step=...', keyinroq qatorlarda asl
+    sabab ('caused an exception: ...'). Eng ma'noli qatorni tanlaymiz.
+    """
+    step_labels = {
+        "extract": "ma'lumot olish (extract)",
+        "normalize": "normalizatsiya",
+        "load": "yuklash (load)",
+        "run": "pipeline ishga tushirish",
+        "sync": "destination bilan sinxronlash",
+    }
+    label = step_labels.get(step_name, step_name)
+    text = (exception_text or "").strip()
+    if not text:
+        return f"{label} bosqichida xato: noma'lum xato"
+
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    # prefer the line with the actual root cause
+    preferred = None
+    for ln in lines:
+        low = ln.lower()
+        if "caused an exception:" in low or "connection refused" in low or "operationalerror" in low:
+            preferred = ln
+            break
+    if preferred is None:
+        # skip pure class-name lines like "<class '...'>"
+        for ln in reversed(lines):
+            if not (ln.startswith("<class ") and ln.endswith(">")):
+                preferred = ln
+                break
+    if preferred is None:
+        preferred = lines[0]
+
+    if len(preferred) > 240:
+        preferred = preferred[:237] + "..."
+    return f"{label} bosqichida xato: {preferred}"
+
+
 def get_failed_jobs(name: str, store: ControlStore | None = None) -> list[dict[str, str]]:
+    """Faqat haqiqiy muvaffaqiyatsizliklarni qaytaradi (o'zbekcha detail).
+
+    dlt 1.30: PipelineTrace.steps[*].step_exception faqat step yiqilganda
+    to'ldiriladi. Muvaffaqiyatli run'da step_exception=None — ular bu yerga
+    kirmaydi. "Oxirgi ish kuzatuvi mavjud" kabi mazmunsiz qator yozilmaydi.
+    """
     _, stored = _load_stored(name, store)
     pipeline = build_dlt_pipeline(stored.config)
     out: list[dict[str, str]] = []
     try:
         last = pipeline.last_trace
         if last is not None:
-            out.append(
-                {
-                    "job": "last_trace",
-                    "detail": f"Oxirgi ish kuzatuvi mavjud: {type(last).__name__}",
-                }
-            )
-        for attr in ("list_failed_jobs", "list_failed_jobs_in_package"):
-            fn = getattr(pipeline, attr, None)
+            for step in getattr(last, "steps", []) or []:
+                exc = getattr(step, "step_exception", None)
+                if not exc:
+                    continue
+                step_name = str(getattr(step, "step", "unknown"))
+                # step_exception odatda multi-line va asl sababni o'z ichiga oladi
+                detail = _uz_step_fail_detail(step_name, str(exc))
+                out.append({"job": f"step:{step_name}", "detail": detail})
+
+            # package-level failed jobs (load_id ma'lum bo'lsa)
+            fn = getattr(pipeline, "list_failed_jobs_in_package", None)
             if callable(fn):
-                try:
-                    jobs = fn()
-                    if jobs:
-                        for j in jobs:
-                            out.append(
-                                {
-                                    "job": str(getattr(j, "job_id", j)),
-                                    "detail": f"Muvaffaqiyatsiz job: {j}",
-                                }
-                            )
-                except TypeError:
-                    pass
+                load_ids: list[str] = []
+                load_info = getattr(last, "last_load_info", None)
+                if load_info is not None:
+                    loads = getattr(load_info, "loads_ids", None) or getattr(
+                        load_info, "load_ids", None
+                    )
+                    if loads:
+                        load_ids = list(loads)
+                for lid in load_ids:
+                    try:
+                        jobs = fn(lid)
+                    except TypeError as e:
+                        log.warning("failed_jobs_lookup_unsupported: %s", e)
+                        break
+                    except Exception as e:
+                        log.warning("failed_jobs_lookup_error: %s", e)
+                        continue
+                    if not jobs:
+                        continue
+                    for j in jobs:
+                        out.append(
+                            {
+                                "job": str(getattr(j, "job_id", j)),
+                                "detail": f"Yuklash job muvaffaqiyatsiz: {j}",
+                            }
+                        )
     except Exception as e:
+        log.warning("get_failed_jobs_error: %s", e)
         out.append({"job": "error", "detail": f"Failed jobs o'qib bo'lmadi: {e}"})
+
     if not out:
         out.append(
             {
                 "job": "none",
-                "detail": "Hozircha failed job topilmadi — qayta Run qilib ko'ring",
+                "detail": "Hozircha muvaffaqiyatsiz ish topilmadi",
             }
         )
     return out
