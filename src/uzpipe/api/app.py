@@ -1,12 +1,14 @@
-"""uzpipe.api.app — FastAPI: auth, pipelines, runs, scheduler, demo, recovery."""
+"""uzpipe.api.app — FastAPI: auth, pipelines, runs, scheduler, demo, recovery, async run."""
 from __future__ import annotations
 
 import logging
 import re
+import time
+import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -39,15 +41,20 @@ from uzpipe.core.scheduler import (
     status as scheduler_status,
     stop_scheduler,
 )
-from uzpipe.security.api_key import load_or_create_api_key
+from uzpipe.security.api_key import keys_match, load_or_create_api_key
 from uzpipe.store.control_store import ControlStore
 from uzpipe.store.run_store import RunStore
 
 register_builtin_connectors()
 
+log = logging.getLogger("uzpipe.api")
+
 app = FastAPI(title="UzPipe", version="0.1.0", docs_url="/api/docs")
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:8000", "http://localhost:8000"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 
@@ -85,7 +92,7 @@ async def require_api_key(request: Request) -> None:
         auth = request.headers.get("Authorization") or ""
         if auth.lower().startswith("bearer "):
             provided = auth[7:].strip()
-    if not provided or provided != expected:
+    if not provided or not keys_match(provided, expected):
         raise HTTPException(status_code=401, detail="API key kerak yoki noto'g'ri (X-API-Key)")
 
 
@@ -95,7 +102,7 @@ def _startup() -> None:
     try:
         start_scheduler()
     except Exception:
-        logging.getLogger("uzpipe.api").exception("scheduler_startup_failed")
+        log.exception("scheduler_startup_failed")
 
 
 def _store() -> ControlStore:
@@ -129,6 +136,78 @@ class RunResponse(BaseModel):
     duration_seconds: float = 0.0
     total_rows: int = 0
     rows_per_second: float = 0.0
+
+
+# Background run jobs (in-memory; single uvicorn process). See review notes.
+_RUN_JOBS: dict[str, dict[str, Any]] = {}
+
+
+def _execute_run_job(job_id: str, name: str) -> None:
+    job = _RUN_JOBS[job_id]
+    job["status"] = "running"
+    try:
+        register_builtin_connectors()
+        result = run_pipeline_by_name(name, store=_store())
+        details = [
+            {"passed": o.passed, "detail": o.detail} for o in result.quality_report.outcomes
+        ]
+        try:
+            _runs().record(
+                pipeline_name=result.pipeline_name,
+                success=result.success,
+                quality_passed=result.quality_report.all_passed,
+                row_counts=result.row_counts,
+                quality_details=details,
+                trigger="manual-async",
+                duration_seconds=result.duration_seconds,
+                total_rows=result.total_rows,
+                rows_per_second=result.rows_per_second,
+            )
+        except Exception:
+            log.exception("run_record_failed pipeline=%s job=%s", name, job_id)
+        job["status"] = "done"
+        job["result"] = RunResponse(
+            pipeline_name=result.pipeline_name,
+            success=result.success,
+            row_counts=result.row_counts,
+            quality_passed=result.quality_report.all_passed,
+            quality_details=details,
+            duration_seconds=result.duration_seconds,
+            total_rows=result.total_rows,
+            rows_per_second=round(result.rows_per_second, 1),
+        ).model_dump(mode="json")
+    except Exception as e:
+        log.exception("run_job_failed pipeline=%s job=%s", name, job_id)
+        job["status"] = "error"
+        job["error"] = str(e)
+    finally:
+        job["finished_at"] = time.time()
+
+
+@app.post("/api/pipelines/{name}/run/async", dependencies=[Depends(require_api_key)])
+def run_pipeline_async(name: str, background_tasks: BackgroundTasks) -> dict[str, str]:
+    """Fon rejimida ishga tushiradi, darhol run_id qaytaradi (bloklamaydi)."""
+    if _store().load(name) is None:
+        raise HTTPException(404, f"Pipeline '{name}' topilmadi")
+    job_id = uuid.uuid4().hex
+    _RUN_JOBS[job_id] = {
+        "status": "queued",
+        "pipeline_name": name,
+        "started_at": time.time(),
+        "finished_at": None,
+        "result": None,
+        "error": None,
+    }
+    background_tasks.add_task(_execute_run_job, job_id, name)
+    return {"run_id": job_id, "status": "queued", "pipeline_name": name}
+
+
+@app.get("/api/runs/jobs/{run_id}", dependencies=[Depends(require_api_key)])
+def run_job_status(run_id: str) -> dict[str, Any]:
+    job = _RUN_JOBS.get(run_id)
+    if job is None:
+        raise HTTPException(404, f"Job '{run_id}' topilmadi")
+    return job
 
 
 @app.get("/")
@@ -311,7 +390,7 @@ def run_pipeline(name: str) -> RunResponse:
             rows_per_second=result.rows_per_second,
         )
     except Exception:
-        pass
+        log.exception("run_record_failed pipeline=%s", result.pipeline_name)
     return RunResponse(
         pipeline_name=result.pipeline_name,
         success=result.success,
@@ -356,7 +435,7 @@ def demo_volume(row_count: int = 100000) -> dict[str, Any]:
             rows_per_second=result.rows_per_second,
         )
     except Exception:
-        pass
+        log.exception("run_record_failed pipeline=%s trigger=demo", result.pipeline_name)
     return {
         "pipeline_name": result.pipeline_name,
         "success": result.success,
@@ -403,7 +482,7 @@ def scheduler_reload() -> dict[str, object]:
 def get_telegram_settings() -> dict[str, Any]:
     from uzpipe.core.notify import TELEGRAM_BOT_TOKEN_KEY
 
-    token = _store().get_setting(TELEGRAM_BOT_TOKEN_KEY)
+    token = _store().get_secret_setting(TELEGRAM_BOT_TOKEN_KEY)
     return {"configured": bool(token)}
 
 
@@ -414,7 +493,7 @@ def put_telegram_settings(body: dict[str, Any]) -> dict[str, Any]:
     token = (body.get("bot_token") or "").strip()
     if not token:
         raise HTTPException(422, "bot_token majburiy")
-    _store().set_setting(TELEGRAM_BOT_TOKEN_KEY, token)
+    _store().set_secret_setting(TELEGRAM_BOT_TOKEN_KEY, token)
     return {"configured": True}
 
 
