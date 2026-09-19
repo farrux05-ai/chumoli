@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from dlt.sources.sql_database import sql_database
+from dlt.sources.sql_database import sql_database, sql_table
 
 from uzpipe.core.manifest import ConnectorCategory, ConnectorManifest, FieldSpec, FieldType
 
@@ -94,25 +94,37 @@ def _preflight_sqlite(credentials: str) -> None:
 def _build_sql_database_source(
     params: dict[str, Any], secrets: dict[str, str]
 ) -> Any:
-    """Barcha SQL connectorlar uchun yagona dlt chaqiruvi."""
+    """Barcha SQL connectorlar uchun yagona dlt chaqiruvi.
+
+    incremental faqat sql_table() darajasida mavjud — sql_database()
+    uni qabul qilmaydi (dlt 1.30). cursor_column bo'sh bo'lsa oddiy
+    sql_database; to'ldirilsa har jadval uchun alohida sql_table +
+    incremental() yig'iladi.
+    """
     table_names = [t.strip() for t in params["table_names"].split(",") if t.strip()]
     cursor_column = params.get("cursor_column") or None
     credentials = secrets["connection_string"]
     _preflight_sqlite(credentials)
 
-    kwargs: dict[str, Any] = {
-        "credentials": credentials,
-        "table_names": table_names,
-    }
-    if cursor_column:
-        # dlt incremental source-level: barcha jadvallar bir xil
-        # cursor ustunini ishlatadi. Farqli cursor kerak bo'lsa —
-        # alohida pipeline.
-        import dlt
+    if not cursor_column:
+        return sql_database(credentials=credentials, table_names=table_names)
 
-        kwargs["incremental"] = dlt.sources.incremental(cursor_column)
+    import dlt
 
-    return sql_database(**kwargs)
+    # Har bir jadvalga ALOHIDA incremental() obyekti — bitta obyektni
+    # bir nechta resource orasida ulashish holatni chalkashtirishi mumkin.
+    @dlt.source(name="sql_database")
+    def _incremental_source() -> Any:
+        return [
+            sql_table(
+                credentials=credentials,
+                table=t,
+                incremental=dlt.sources.incremental(cursor_column),
+            )
+            for t in table_names
+        ]
+
+    return _incremental_source()
 
 
 # ---------------------------------------------------------------------------

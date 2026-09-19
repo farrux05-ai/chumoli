@@ -412,6 +412,13 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
     for k in secret_keys:
         secrets.setdefault(k, "")
 
+    # Edit: empty secret means "keep existing" — do not overwrite with blank.
+    existing = _store().load(body.name)
+    if existing is not None:
+        for k in secret_keys:
+            if not secrets.get(k):
+                secrets[k] = existing.secrets.get(k, "")
+
     errors = manifest.validate_values({**params, **secrets})
     if errors:
         raise HTTPException(422, {"validation_errors": errors})
@@ -439,6 +446,16 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
         secrets[DEST_CONNECTION_SECRET_KEY] = dest.connection
         dest.connection = None
 
+    quality = body.quality
+    # Default: if no quality checks configured, enforce row_count_min=1
+    # so empty loads surface as quality failures rather than silent success.
+    if (
+        quality.row_count_min is None
+        and not quality.not_null_columns
+        and not quality.no_duplicates_key
+    ):
+        quality = quality.model_copy(update={"row_count_min": 1})
+
     try:
         config = PipelineConfig(
             name=body.name,
@@ -448,7 +465,7 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
             write_disposition=body.write_disposition,
             primary_key=body.primary_key,
             schedule=body.schedule,
-            quality=body.quality,
+            quality=quality,
             notify=body.notify,
         )
     except ValidationError as e:

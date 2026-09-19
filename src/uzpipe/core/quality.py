@@ -98,6 +98,24 @@ class QualityReport:
         return [o for o in self.outcomes if not o.passed]
 
 
+def _run_check_safely(check_name: str, table: str, fn, *args) -> CheckOutcome:
+    """Run one quality check; on DB/SQL error return a failed outcome instead of crashing the pipeline.
+
+    A missing table or bad column name must surface as a failed check
+    (shown in the dashboard), not as an unhandled exception that marks
+    the whole run as error.
+    """
+    try:
+        return fn(*args)
+    except Exception as e:
+        return CheckOutcome(
+            check_name=check_name,
+            table_name=table,
+            passed=False,
+            detail=f"{table}: tekshirib bo'lmadi — {e}",
+        )
+
+
 def run_quality_checks(
     pipeline: dlt.Pipeline,
     quality: QualityConfig,
@@ -122,21 +140,46 @@ def run_quality_checks(
 
     if quality.row_count_min is not None:
         for table in target_tables:
-            report.outcomes.append(_check_row_count(pipeline, table, quality.row_count_min))
+            report.outcomes.append(
+                _run_check_safely(
+                    "row_count", table, _check_row_count, pipeline, table, quality.row_count_min
+                )
+            )
 
     if quality.not_null_columns:
         for table in target_tables:
             for column in quality.not_null_columns:
-                report.outcomes.append(_check_not_null(pipeline, table, column))
+                report.outcomes.append(
+                    _run_check_safely(
+                        "not_null", f"{table}.{column}", _check_not_null, pipeline, table, column
+                    )
+                )
 
     if quality.no_duplicates_key:
         for table in target_tables:
-            report.outcomes.append(_check_no_duplicates(pipeline, table, quality.no_duplicates_key))
+            report.outcomes.append(
+                _run_check_safely(
+                    "no_duplicates",
+                    f"{table}.{quality.no_duplicates_key}",
+                    _check_no_duplicates,
+                    pipeline,
+                    table,
+                    quality.no_duplicates_key,
+                )
+            )
 
     if quality.freshness_max_minutes is not None and quality.freshness_column:
         for table in target_tables:
             report.outcomes.append(
-                _check_freshness(pipeline, table, quality.freshness_column, quality.freshness_max_minutes)
+                _run_check_safely(
+                    "freshness",
+                    table,
+                    _check_freshness,
+                    pipeline,
+                    table,
+                    quality.freshness_column,
+                    quality.freshness_max_minutes,
+                )
             )
 
     return report

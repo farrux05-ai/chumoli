@@ -89,16 +89,16 @@ tbody tr:hover{background:var(--surface-2)}
   <aside id="sidebar">
     <div class="logo"><div class="logo-mark">U</div>UzPipe</div>
     <nav style="padding:12px 0;flex:1">
-      <button class="nav-item active" data-page="pipelines">Pipelines</button>
-      <button class="nav-item" data-page="connectors">Connectors</button>
-      <button class="nav-item" data-page="runs">Runs</button>
-      <button class="nav-item" data-page="settings">Settings</button>
+      <button class="nav-item active" data-page="pipelines">Pipeline'lar</button>
+      <button class="nav-item" data-page="connectors">Ulagichlar</button>
+      <button class="nav-item" data-page="runs">Ishga tushirishlar</button>
+      <button class="nav-item" data-page="settings">Sozlamalar</button>
     </nav>
     <div style="padding:12px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--faint)">Local · dlt engine</div>
   </aside>
   <div id="main">
     <header id="topbar">
-      <span id="top-title" style="font-weight:550">Pipelines</span>
+      <span id="top-title" style="font-weight:550">Pipeline'lar</span>
       <div class="status-pill" id="health-pill"><span class="d"></span><span id="health-text">…</span></div>
     </header>
     <div id="content"></div>
@@ -113,8 +113,14 @@ tbody tr:hover{background:var(--surface-2)}
 <div id="toast"></div>
 <script>
 const API = '';
-const PAGE_TITLES = {pipelines:'Pipelines', connectors:'Connectors', runs:'Runs', settings:'Settings'};
+const PAGE_TITLES = {pipelines:"Pipeline'lar", connectors:'Ulagichlar', runs:'Ishga tushirishlar', settings:'Sozlamalar'};
 const CONNECTOR_ORDER = ['postgresql','mysql','rest_api','sql_database','click_uz','payme_uz','uzum_market','synthetic_volume'];
+const CATEGORY_LABELS = {
+  uz_payment: "To'lov tizimlari",
+  uz_gov: "Davlat xizmatlari",
+  uz_erp: "ERP / buxgalteriya",
+  universal: "Universal",
+};
 
 let connectors = [];
 let destinations = [];
@@ -127,6 +133,8 @@ let telegramCfg = {configured:false};
 let page = 'pipelines';
 let selectedConnector = null;
 let step = 1;
+let draft = {};  // step-2 field values survive back/next re-renders
+let editingName = null;  // non-null when editing an existing pipeline
 let pollTimers = {};
 let recoverPipeline = null;
 
@@ -267,14 +275,23 @@ function render() {
 function renderConnectors() {
   const list = sortedConnectors();
   const c = document.getElementById('content');
-  c.innerHTML = `<div class="page-title">Connectors</div>
-    <div class="page-sub">Manifest-driven katalog — forma shu yerdan chiziladi</div>
+  c.innerHTML = `<div class="page-title">Ulagichlar</div>
+    <div class="page-sub">Manifest-driven katalog — kartochkani bosing, yangi pipeline ochiladi</div>
     <div class="cards">${list.map(x => `
-      <div class="card" style="cursor:default">
-        <div class="card-title">${x.label}</div>
-        <div class="card-desc">${x.description || ''}</div>
-        <div style="margin-top:10px;font-size:11.5px;color:var(--faint)">${x.category} · ${x.fields.length} maydon · <span class="mono">${x.key}</span></div>
+      <div class="card" data-ck="${esc(x.key)}">
+        <div class="card-title">${esc(x.label)}</div>
+        <div class="card-desc">${esc(x.description || '')}</div>
+        <div style="margin-top:10px;font-size:11.5px;color:var(--faint)">${esc(CATEGORY_LABELS[x.category] || x.category)} · ${x.fields.length} maydon · <span class="mono">${esc(x.key)}</span></div>
       </div>`).join('')}</div>`;
+  c.querySelectorAll('[data-ck]').forEach(b => b.onclick = () => {
+    selectedConnector = b.dataset.ck;
+    draft = {};
+    editingName = null;
+    step = 2;
+    document.getElementById('drawer-title').textContent = 'Yangi pipeline';
+    renderDrawer();
+    openDrawer();
+  });
 }
 
 function renderPipelines() {
@@ -282,7 +299,7 @@ function renderPipelines() {
   c.innerHTML = `
     <div class="header-row">
       <div>
-        <div class="page-title">Pipelines</div>
+        <div class="page-title">Pipeline'lar</div>
         <div class="page-sub">${pipelines.length} ta saqlangan pipeline</div>
       </div>
       <button class="btn btn-primary" id="btn-add">+ Yangi pipeline</button>
@@ -310,7 +327,8 @@ function renderPipelines() {
           <td class="mono">${rows}</td>
           <td class="mono">${lr ? fmtDur(lr.duration_seconds) : '—'}</td>
           <td><div class="row-actions">
-            <button class="btn btn-outline btn-sm" data-run="${esc(p.name)}">Run</button>
+            <button class="btn btn-outline btn-sm" data-run="${esc(p.name)}">Ishga tush.</button>
+            <button class="btn btn-outline btn-sm" data-edit="${esc(p.name)}">Tahrirlash</button>
             ${lr && lr.success === false ? `<button class="btn btn-outline btn-sm" data-recover="${esc(p.name)}">Tiklash</button>` : ''}
             <button class="btn btn-danger btn-sm" data-del="${esc(p.name)}">O'chir</button>
           </div></td>
@@ -327,6 +345,7 @@ function renderPipelines() {
   const dr = document.getElementById('btn-demo-rest');
   if (dr) dr.onclick = () => runDemo('rest', dr);
   c.querySelectorAll('[data-run]').forEach(b => b.onclick = () => runPipeline(b.dataset.run, b));
+  c.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => startEdit(b.dataset.edit));
   c.querySelectorAll('[data-del]').forEach(b => b.onclick = () => delPipeline(b.dataset.del));
   c.querySelectorAll('[data-recover]').forEach(b => b.onclick = () => openRecover(b.dataset.recover));
 }
@@ -564,15 +583,76 @@ async function delPipeline(name) {
   } catch (e) { toast(e.message, 'err'); }
 }
 
-function startAdd() {
+async function startAdd() {
+  if (!telegramCfg.configured) {
+    try { telegramCfg = await api('/api/settings/telegram'); } catch {}
+  }
   step = 1;
   selectedConnector = null;
+  draft = {};
+  editingName = null;
   document.getElementById('drawer-title').textContent = 'Yangi pipeline';
   renderDrawer();
   openDrawer();
 }
 
+async function startEdit(name) {
+  if (!telegramCfg.configured) {
+    try { telegramCfg = await api('/api/settings/telegram'); } catch {}
+  }
+  try {
+    const p = await api('/api/pipelines/' + encodeURIComponent(name));
+    const cfg = p.config || {};
+    selectedConnector = p.connector_key;
+    editingName = name;
+    draft = {};
+    draft['f-name'] = name;
+    const sp = cfg.source_params || {};
+    for (const [k, v] of Object.entries(sp)) {
+      draft['f-' + k] = v == null ? '' : String(v);
+    }
+    // Secrets are never returned — leave blank; empty on save keeps existing.
+    const dest = cfg.destination || {};
+    draft['f-dest-mode'] = 'new';
+    draft['f-dest'] = dest.connector || 'duckdb';
+    draft['f-dataset'] = dest.dataset_name || 'raw';
+    draft['f-wd'] = cfg.write_disposition || 'replace';
+    draft['f-pk'] = (cfg.primary_key || []).join(', ');
+    const sch = cfg.schedule || {};
+    draft['f-sched-kind'] = sch.kind || 'manual';
+    draft['f-sched-min'] = sch.interval_minutes != null ? String(sch.interval_minutes) : '60';
+    const q = cfg.quality || {};
+    draft['f-q-min'] = q.row_count_min != null ? String(q.row_count_min) : '';
+    draft['f-q-nn'] = (q.not_null_columns || []).join(', ');
+    draft['f-q-dup'] = q.no_duplicates_key || '';
+    draft['f-q-table'] = q.table_name || '';
+    const n = cfg.notify || {};
+    draft['f-tg-chat'] = n.telegram_chat_id || '';
+    draft['f-n-fail'] = n.on_failure !== false;
+    draft['f-n-ok'] = !!n.on_success;
+    step = 2;
+    document.getElementById('drawer-title').textContent = 'Tahrirlash: ' + name;
+    renderDrawer();
+    openDrawer();
+  } catch (e) {
+    toast(e.message, 'err');
+  }
+}
+
+function captureDraft() {
+  document.querySelectorAll('#drawer-body [id^="f-"]').forEach(el => {
+    if (el.type === 'checkbox') draft[el.id] = el.checked;
+    else draft[el.id] = el.value;
+  });
+}
+
+function dv(id, fallback) {
+  if (draft[id] !== undefined && draft[id] !== null) return draft[id];
+  return fallback;
+}
+
 function renderDrawer() {
+  captureDraft();
   const body = document.getElementById('drawer-body');
   const foot = document.getElementById('drawer-foot');
   if (step === 1) {
@@ -584,7 +664,9 @@ function renderDrawer() {
           <div class="card-desc">${x.description||''}</div>
         </button>`).join('')}</div>`;
     body.querySelectorAll('[data-ck]').forEach(b => b.onclick = () => {
+      if (selectedConnector !== b.dataset.ck) draft = {};
       selectedConnector = b.dataset.ck;
+      editingName = null;
       renderDrawer();
     });
     foot.innerHTML = `<button class="btn btn-primary" id="next1" ${selectedConnector?'':'disabled'}>Keyingi</button>`;
@@ -594,14 +676,17 @@ function renderDrawer() {
   }
   const m = connectors.find(x => x.key === selectedConnector);
   const destOpts = (destinations.length ? destinations : [{key:'duckdb',label:'DuckDB',needs_connection:false}])
-    .map(d => `<option value="${d.key}" data-needs="${d.needs_connection?1:0}">${d.label}</option>`).join('');
+    .map(d => `<option value="${d.key}" data-needs="${d.needs_connection?1:0}" ${dv('f-dest','duckdb')===d.key?'selected':''}>${d.label}</option>`).join('');
   const savedOpts = (savedDestinations||[]).map(s =>
-    `<option value="${esc(s.id)}">${esc(s.label)} (${esc(s.connector)})</option>`).join('');
+    `<option value="${esc(s.id)}" ${dv('f-saved-dest','')===s.id?'selected':''}>${esc(s.label)} (${esc(s.connector)})</option>`).join('');
   const isSql = ['sql_database','postgresql','mysql'].includes(selectedConnector);
+  const destModeVal = dv('f-dest-mode', 'new');
+  const wdVal = dv('f-wd', 'replace');
+  const schedKindVal = dv('f-sched-kind', 'manual');
   body.innerHTML = `
     <div class="field"><label>Pipeline nomi</label>
-      <input id="f-name" placeholder="masalan postgres_orders" />
-      <div class="field-hint">Faqat harf, raqam, _ va -</div></div>
+      <input id="f-name" placeholder="masalan postgres_orders" value="${esc(dv('f-name',''))}" ${editingName ? 'readonly' : ''} />
+      <div class="field-hint">${editingName ? 'Nom o\'zgartirilmaydi (tahrirlash)' : 'Faqat harf, raqam, _ va -'}</div></div>
     ${(m?.fields||[]).map(f => fieldHtml(f, isSql)).join('')}
     ${isSql ? `<div class="field" id="sql-inspect-wrap">
       <button type="button" class="btn btn-outline" id="btn-inspect" style="width:100%">Ulanishni tekshirish</button>
@@ -610,8 +695,8 @@ function renderDrawer() {
     </div>` : ''}
     <div class="field"><label>Destination manbai</label>
       <select id="f-dest-mode">
-        <option value="new">Yangi destination</option>
-        ${savedOpts ? `<option value="saved">Saqlangan destination</option>` : ''}
+        <option value="new" ${destModeVal==='new'?'selected':''}>Yangi destination</option>
+        ${savedOpts ? `<option value="saved" ${destModeVal==='saved'?'selected':''}>Saqlangan destination</option>` : ''}
       </select></div>
     <div id="dest-saved-wrap" style="display:none" class="field">
       <label>Saqlangan destination</label>
@@ -622,68 +707,89 @@ function renderDrawer() {
         <select id="f-dest">${destOpts}</select></div>
       <div class="field" id="dest-conn-wrap" style="display:none">
         <label id="dest-conn-label">Connection</label>
-        <input id="f-dest-conn" type="password" placeholder="" />
+        <input id="f-dest-conn" type="password" placeholder="" value="${esc(dv('f-dest-conn',''))}" />
         <div class="field-hint" id="dest-conn-help"></div>
       </div>
       <div class="field"><label>Dataset nomi</label>
-        <input id="f-dataset" value="raw" />
+        <input id="f-dataset" value="${esc(dv('f-dataset','raw'))}" />
         <div class="field-hint">dlt schema / dataset nomi</div></div>
       <div class="field" style="display:flex;align-items:center;gap:8px">
-        <input type="checkbox" id="f-save-dest" />
+        <input type="checkbox" id="f-save-dest" ${dv('f-save-dest',false)?'checked':''} />
         <label for="f-save-dest" style="margin:0;font-weight:500;color:var(--dim)">Keyingi safar uchun saqlash</label>
       </div>
       <div class="field" id="save-dest-label-wrap" style="display:none">
         <label>Saqlash nomi</label>
-        <input id="f-save-dest-label" placeholder="masalan Prod Postgres" />
+        <input id="f-save-dest-label" placeholder="masalan Prod Postgres" value="${esc(dv('f-save-dest-label',''))}" />
       </div>
     </div>
     <div class="field"><label>Write disposition</label>
       <select id="f-wd">
-        <option value="replace">replace</option>
-        <option value="append">append</option>
-        <option value="merge">merge</option>
+        <option value="replace" ${wdVal==='replace'?'selected':''}>replace</option>
+        <option value="append" ${wdVal==='append'?'selected':''}>append</option>
+        <option value="merge" ${wdVal==='merge'?'selected':''}>merge</option>
       </select></div>
     <div class="field"><label>Primary key (merge)</label>
-      <input id="f-pk" placeholder="id yoki col1,col2" />
+      <input id="f-pk" placeholder="id yoki col1,col2" value="${esc(dv('f-pk',''))}" />
       <div class="field-hint">merge uchun ustunlar, vergul bilan</div></div>
     <div class="field"><label>Jadval (schedule)</label>
       <select id="f-sched-kind">
-        <option value="manual">Manual</option>
-        <option value="interval">Interval</option>
+        <option value="manual" ${schedKindVal==='manual'?'selected':''}>Manual</option>
+        <option value="interval" ${schedKindVal==='interval'?'selected':''}>Interval</option>
       </select></div>
     <div class="field" id="sched-interval-wrap" style="display:none">
       <label>Interval (daqiqa)</label>
-      <input id="f-sched-min" type="number" min="1" value="60" />
+      <input id="f-sched-min" type="number" min="1" value="${esc(dv('f-sched-min','60'))}" />
     </div>
-    <div class="field"><label>Quality — min qator</label>
-      <input id="f-q-min" type="number" min="0" placeholder="bo'sh = tekshirilmaydi" />
-    </div>
-    <div class="field"><label>Quality — not null ustunlar</label>
-      <input id="f-q-nn" placeholder="col1, col2" />
-    </div>
-    <div class="field"><label>Quality — no duplicates key</label>
-      <input id="f-q-dup" placeholder="id" />
-    </div>
-    <div class="field"><label>Quality — jadval nomi</label>
-      <input id="f-q-table" placeholder="ixtiyoriy" />
-    </div>
+    <details style="margin-bottom:14px;border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+      <summary style="cursor:pointer;font-weight:500;color:var(--dim)">Kengaytirilgan (ixtiyoriy) — quality</summary>
+      <div class="field" style="margin-top:12px"><label>Quality — min qator</label>
+        <input id="f-q-min" type="number" min="0" placeholder="bo'sh = avto 1" value="${esc(dv('f-q-min',''))}" />
+        <div class="field-hint">Bo'sh qoldirilsa backend avtomatik min=1 qo'llaydi</div>
+      </div>
+      <div class="field"><label>Quality — not null ustunlar</label>
+        <input id="f-q-nn" placeholder="col1, col2" value="${esc(dv('f-q-nn',''))}" />
+      </div>
+      <div class="field"><label>Quality — no duplicates key</label>
+        <input id="f-q-dup" placeholder="id" value="${esc(dv('f-q-dup',''))}" />
+      </div>
+      <div class="field"><label>Quality — jadval nomi</label>
+        <input id="f-q-table" placeholder="ixtiyoriy" value="${esc(dv('f-q-table',''))}" />
+      </div>
+    </details>
     <div class="field"><label>Telegram chat id</label>
-      <input id="f-tg-chat" placeholder="masalan -100123…" />
-      <div class="field-hint">Notify uchun; token Settings da</div></div>
+      <input id="f-tg-chat" placeholder="masalan -100123…" value="${esc(dv('f-tg-chat',''))}" />
+      <div class="field-hint">Notify uchun; token Sozlamalar da</div>
+      ${!telegramCfg.configured ? `
+      <div class="field-hint" style="color:var(--amber);margin-top:6px">
+        ⚠ Telegram bot token hali sozlanmagan.
+        <a href="#" id="goto-telegram-settings" style="color:var(--accent)">Sozlamalarga o'tish</a>
+      </div>` : ''}
+    </div>
     <div class="field" style="display:flex;gap:16px;align-items:center">
       <label style="display:flex;align-items:center;gap:6px;margin:0;font-weight:500;color:var(--dim)">
-        <input type="checkbox" id="f-n-fail" checked /> Xatoda xabar
+        <input type="checkbox" id="f-n-fail" ${dv('f-n-fail',true)?'checked':''} /> Xatoda xabar
       </label>
       <label style="display:flex;align-items:center;gap:6px;margin:0;font-weight:500;color:var(--dim)">
-        <input type="checkbox" id="f-n-ok" /> Muvaffaqiyatda xabar
+        <input type="checkbox" id="f-n-ok" ${dv('f-n-ok',false)?'checked':''} /> Muvaffaqiyatda xabar
       </label>
     </div>
   `;
   foot.innerHTML = `
     <button class="btn btn-outline" id="back2">Orqaga</button>
-    <button class="btn btn-primary" id="save2">Saqlash</button>`;
+    <button class="btn btn-primary" id="save2">${editingName ? 'Yangilash' : 'Saqlash'}</button>`;
   document.getElementById('back2').onclick = () => { step = 1; renderDrawer(); };
   document.getElementById('save2').onclick = savePipeline;
+  const gotoTg = document.getElementById('goto-telegram-settings');
+  if (gotoTg) {
+    gotoTg.onclick = (e) => {
+      e.preventDefault();
+      closeDrawer();
+      page = 'settings';
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === 'settings'));
+      document.getElementById('top-title').textContent = PAGE_TITLES.settings;
+      render();
+    };
+  }
   const destSel = document.getElementById('f-dest');
   const destMode = document.getElementById('f-dest-mode');
   const syncDest = () => {
@@ -711,6 +817,9 @@ function renderDrawer() {
       document.getElementById('save-dest-label-wrap').style.display =
         saveDestCb.checked ? 'block' : 'none';
     };
+    if (saveDestCb.checked) {
+      document.getElementById('save-dest-label-wrap').style.display = 'block';
+    }
   }
   const btnInspect = document.getElementById('btn-inspect');
   if (btnInspect) btnInspect.onclick = runSqlInspect;
@@ -725,22 +834,26 @@ function renderDrawer() {
 
 function fieldHtml(f, isSql) {
   const req = f.required ? ' *' : '';
+  const savedVal = draft['f-' + f.key] ?? f.default ?? '';
   if (f.type === 'select') {
     return `<div class="field"><label>${esc(f.label)}${req}</label>
       <select id="f-${esc(f.key)}">${(f.options||[]).map(o =>
-        `<option value="${esc(o.value)}" ${f.default===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}
+        `<option value="${esc(o.value)}" ${savedVal===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}
       </select>
       ${f.help_text?`<div class="field-hint">${esc(f.help_text)}</div>`:''}</div>`;
   }
-  // SQL table_names: keep hidden text input; checkboxes fill it after inspect
+  // SQL table_names: keep text input; checkboxes fill it after inspect
   if (isSql && f.key === 'table_names') {
     return `<div class="field"><label>${esc(f.label)}${req}</label>
-      <input id="f-${esc(f.key)}" type="text" placeholder="${esc(f.placeholder||'')}" value="${esc(f.default ?? '')}" />
+      <input id="f-${esc(f.key)}" type="text" placeholder="${esc(f.placeholder||'')}" value="${esc(savedVal)}" />
       <div class="field-hint">Qo'lda yozing yoki pastroqda "Ulanishni tekshirish" orqali tanlang</div></div>`;
   }
   const type = f.type === 'password' ? 'password' : (f.type === 'number' ? 'number' : 'text');
+  const ph = (f.type === 'password' && editingName)
+    ? "Bo'sh qoldiring — o'zgarmaydi"
+    : (f.placeholder || '');
   return `<div class="field"><label>${esc(f.label)}${req}</label>
-    <input id="f-${esc(f.key)}" type="${type}" placeholder="${esc(f.placeholder||'')}" value="${esc(f.default ?? '')}" />
+    <input id="f-${esc(f.key)}" type="${type}" placeholder="${esc(ph)}" value="${esc(f.type==='password'?'':savedVal)}" />
     ${f.help_text?`<div class="field-hint">${esc(f.help_text)}</div>`:''}</div>`;
 }
 
