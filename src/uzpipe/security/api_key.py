@@ -12,9 +12,21 @@ Key resolution order:
 
 from __future__ import annotations
 
+import hmac
 import os
 import secrets
 from pathlib import Path
+
+
+def keys_match(provided: str, expected: str) -> bool:
+    """Constant-time comparison for API keys (avoids timing side-channel).
+
+    Plain `provided != expected` short-circuits on the first mismatching
+    byte, which leaks how many leading characters were guessed correctly
+    over repeated attempts. `hmac.compare_digest` runs in time
+    independent of where the strings first differ.
+    """
+    return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
 
 
 def _default_key_path() -> Path:

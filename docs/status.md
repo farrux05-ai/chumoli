@@ -1,26 +1,18 @@
-# Status — V1 hardening (P0 + P1)
+# Status — V1 P0 + Round 2
 
 **Verified:** 2026-09-19
 
 ## Tests
-- **76 passed** (`PYTHONPATH=src python -m pytest tests/ -q`)
+- Run: `PYTHONPATH=src python -m pytest tests/ -q`
+- **82 passed** (78 prior + 4 async/P0 tests)
 
-## P0 done
-- API key auth (`X-API-Key` / Bearer); `/api/health` open
-- No silent secret move from `source_params` → 422
-- FastAPI coverage: `tests/test_api.py`, `tests/test_api_auth.py`
+## V1 P0
+- Async run endpoint (`POST /api/pipelines/{name}/run/async` + `GET /api/runs/jobs/{id}`) — sinxron HTTP timeout xavfini yo'qotadi; eski `/run` saqlangan (backward-compat)
+- API key solishtirish: `hmac.compare_digest` / `keys_match` (constant-time)
+- Run history yozish xatolari endi `log.exception` bilan qayd etiladi (silent `pass` yo'q)
 
-## P1 done
-- Telegram notify (global bot token in settings)
-- Recovery helpers + `/api/pipelines/{name}/failed-jobs` + recover actions
-- `merge` requires `primary_key` at save time
-- Scheduler startup failures logged
-
-## Docker
-- Bind `127.0.0.1:8000`
-- See README Security section
-
-## Still open (P2)
-- Shared HTTP retry helper across UZ connectors
-- Broader docs stale cleanup (ROADMAP/POSITIONING/dashboard.md/quality)
-- P1.2 recovery test still weak (no forced failed-job assert)
+## Round 2
+- `get_failed_jobs` faqat haqiqiy `step_exception`
+- Telegram token encrypted (`set_secret_setting`)
+- Recover UI: confirm + failed-job detail
+- CORS localhost
