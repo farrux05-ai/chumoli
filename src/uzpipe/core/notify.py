@@ -77,7 +77,13 @@ def maybe_notify_run(
         chat_id = getattr(notify_cfg, "telegram_chat_id", None)
         if not chat_id:
             return
-        token = store.get_setting(TELEGRAM_BOT_TOKEN_KEY) if store is not None else None
+        token = None
+        if store is not None:
+            getter = getattr(store, "get_secret_setting", None)
+            if callable(getter):
+                token = getter(TELEGRAM_BOT_TOKEN_KEY)
+            if not token:
+                token = store.get_setting(TELEGRAM_BOT_TOKEN_KEY)
         if not token:
             log.debug("telegram_bot_token not set; skip notify")
             return
