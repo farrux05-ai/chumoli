@@ -18,6 +18,7 @@ from uzpipe.connectors import register_builtin_connectors
 from uzpipe.connectors.base import registry
 from uzpipe.core.config import (
     DestinationConfig,
+    NotifyConfig,
     PipelineConfig,
     QualityConfig,
     ScheduleConfig,
@@ -125,6 +126,7 @@ class CreatePipelineBody(BaseModel):
     primary_key: list[str] = Field(default_factory=list)
     schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
     quality: QualityConfig = Field(default_factory=QualityConfig)
+    notify: NotifyConfig = Field(default_factory=NotifyConfig)
 
 
 class RunResponse(BaseModel):
@@ -345,6 +347,7 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
             primary_key=body.primary_key,
             schedule=body.schedule,
             quality=body.quality,
+            notify=body.notify,
         )
     except ValidationError as e:
         raise HTTPException(422, e.errors()) from e
@@ -363,6 +366,10 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
 @app.delete("/api/pipelines/{name}", dependencies=[Depends(require_api_key)])
 def delete_pipeline(name: str) -> dict[str, str]:
     _store().delete(name)
+    try:
+        reload_jobs()
+    except Exception:
+        log.exception("scheduler_reload_failed after delete name=%s", name)
     return {"status": "deleted", "name": name}
 
 

@@ -204,3 +204,59 @@ def test_delete_then_get_404(api) -> None:
     assert c.post("/api/pipelines", headers=_h(key), json=body).status_code == 201
     assert c.delete("/api/pipelines/to_delete", headers=_h(key)).status_code == 200
     assert c.get("/api/pipelines/to_delete", headers=_h(key)).status_code == 404
+
+
+def test_destinations_catalog(api) -> None:
+    c, key, _ = api
+    r = c.get("/api/destinations", headers=_h(key))
+    assert r.status_code == 200
+    keys = {x["key"] for x in r.json()}
+    assert {"duckdb", "postgresql", "filesystem", "clickhouse"} <= keys
+
+
+def test_create_with_notify_and_schedule(api) -> None:
+    c, key, _ = api
+    body = {
+        "name": "p_notify",
+        "connector_key": "rest_api",
+        "source_params": {
+            "base_url": "https://example.com",
+            "endpoint": "/items",
+            "auth_type": "none",
+        },
+        "secrets": {},
+        "destination": {"connector": "duckdb", "dataset_name": "raw"},
+        "write_disposition": "replace",
+        "schedule": {"kind": "manual"},
+        "quality": {"row_count_min": 1},
+        "notify": {
+            "on_failure": True,
+            "on_success": False,
+            "telegram_chat_id": "12345",
+        },
+    }
+    r = c.post("/api/pipelines", headers=_h(key), json=body)
+    assert r.status_code == 201, r.text
+    g = c.get("/api/pipelines/p_notify", headers=_h(key))
+    assert g.status_code == 200
+    cfg = g.json()["config"]
+    assert cfg["notify"]["telegram_chat_id"] == "12345"
+    assert cfg["quality"]["row_count_min"] == 1
+
+
+def test_telegram_settings_encrypted_round_trip(api) -> None:
+    c, key, tmp_path = api
+    r = c.get("/api/settings/telegram", headers=_h(key))
+    assert r.status_code == 200
+    assert r.json()["configured"] is False
+    put = c.put(
+        "/api/settings/telegram",
+        headers=_h(key),
+        json={"bot_token": "tok-secret-xyz"},
+    )
+    assert put.status_code == 200
+    assert put.json()["configured"] is True
+    again = c.get("/api/settings/telegram", headers=_h(key))
+    assert again.json()["configured"] is True
+    # token itself never returned
+    assert "tok-secret-xyz" not in again.text

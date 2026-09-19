@@ -7,6 +7,7 @@ APScheduler asosidagi built-in interval scheduler.
 Faqat ScheduleKind.INTERVAL pipeline'larni ishga tushiradi.
 MANUAL — faqat dashboard/CLI; AIRFLOW — tashqi tizim.
 """
+
 from __future__ import annotations
 
 import logging

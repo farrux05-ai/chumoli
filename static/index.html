@@ -12,9 +12,9 @@
   --hover:#efeae2;--border:#e5dfd5;--border-s:#d6cfc3;
   --text:#1c1917;--dim:#57534e;--faint:#a8a29e;
   --accent:#0d9488;--accent-hover:#0f766e;--accent-soft:rgba(13,148,136,.1);
-  --green:#059669;--red:#dc2626;--amber:#d97706;
+  --green:#059669;--red:#dc2626;--amber:#d97706;--violet:#7c3aed;
   --shadow:0 1px 3px rgba(28,25,23,.04),0 4px 12px rgba(28,25,23,.03);
-  --radius:10px;
+  --radius:10px;--radius-sm:8px;
 }
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;font-size:13.5px}
 button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;background:none;color:inherit}
@@ -26,7 +26,7 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 #content{flex:1;overflow-y:auto;padding:28px}
 .logo{display:flex;align-items:center;gap:10px;padding:16px 14px;border-bottom:1px solid var(--border);font-weight:600}
 .logo-mark{width:28px;height:28px;border-radius:7px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
-.nav-item{display:block;width:100%;text-align:left;padding:9px 14px;margin:2px 8px;width:calc(100% - 16px);border-radius:8px;color:var(--dim);font-weight:500}
+.nav-item{display:block;width:calc(100% - 16px);text-align:left;padding:9px 14px;margin:2px 8px;border-radius:8px;color:var(--dim);font-weight:500}
 .nav-item:hover{background:var(--hover);color:var(--text)}
 .nav-item.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
 .page-title{font-size:20px;font-weight:600;letter-spacing:-.02em}
@@ -35,16 +35,18 @@ input,select,textarea{font-family:inherit;font-size:inherit}
 .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-hover)}
 .btn-outline{border:1px solid var(--border-s);background:var(--surface)}.btn-outline:hover{background:var(--hover)}
 .btn-danger{color:var(--red)}.btn-danger:hover{background:rgba(220,38,38,.08)}
+.btn-sm{height:30px;padding:0 11px;font-size:12.5px}
 .btn:disabled{opacity:.45;pointer-events:none}
 .table-wrap{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);overflow:hidden}
 table{width:100%;border-collapse:collapse;text-align:left}
 th{padding:11px 16px;font-size:11.5px;font-weight:550;color:var(--faint);text-transform:uppercase;letter-spacing:.03em;background:var(--surface-2);border-bottom:1px solid var(--border)}
 td{padding:13px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
 tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface-2)}
 .mono{font-family:'JetBrains Mono',monospace;font-size:12px}
 .badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500}
 .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
-.badge.ok{color:var(--green)}.badge.err{color:var(--red)}.badge.dim{color:var(--faint)}
+.badge.ok{color:var(--green)}.badge.err{color:var(--red)}.badge.dim{color:var(--faint)}.badge.warn{color:var(--amber)}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
 .card{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:16px;cursor:pointer;transition:.12s;text-align:left;box-shadow:var(--shadow)}
 .card:hover{border-color:var(--border-s);box-shadow:0 8px 24px rgba(28,25,23,.06)}
@@ -52,7 +54,7 @@ tr:last-child td{border-bottom:none}
 .card-title{font-weight:600;margin-bottom:4px}.card-desc{color:var(--faint);font-size:12.5px;line-height:1.4}
 .overlay{position:fixed;inset:0;background:rgba(28,25,23,.25);backdrop-filter:blur(2px);z-index:40;display:none}
 .overlay.show{display:block}
-.drawer{position:fixed;top:0;right:0;height:100vh;width:420px;max-width:100vw;background:var(--surface);border-left:1px solid var(--border);z-index:50;transform:translateX(100%);transition:transform .25s;display:flex;flex-direction:column;box-shadow:-8px 0 30px rgba(28,25,23,.06)}
+.drawer{position:fixed;top:0;right:0;height:100vh;width:440px;max-width:100vw;background:var(--surface);border-left:1px solid var(--border);z-index:50;transform:translateX(100%);transition:transform .25s;display:flex;flex-direction:column;box-shadow:-8px 0 30px rgba(28,25,23,.06)}
 .drawer.open{transform:translateX(0)}
 .drawer-head{height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--border);font-weight:550}
 .drawer-body{flex:1;overflow-y:auto;padding:18px}
@@ -64,16 +66,22 @@ tr:last-child td{border-bottom:none}
 .field textarea{height:auto;min-height:72px;padding:10px 12px}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .field-hint{font-size:11.5px;color:var(--faint);margin-top:4px}
-.field-err{font-size:12px;color:var(--red);margin-top:4px}
 #toast{position:fixed;bottom:24px;right:24px;z-index:90;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
-.toast{padding:12px 16px;border:1px solid var(--border);border-radius:10px;background:var(--surface);box-shadow:0 8px 30px rgba(28,25,23,.08);max-width:340px}
+.toast{padding:12px 16px;border:1px solid var(--border);border-radius:10px;background:var(--surface);box-shadow:0 8px 30px rgba(28,25,23,.08);max-width:360px}
 .toast.ok{border-color:rgba(5,150,105,.3)}.toast.err{border-color:rgba(220,38,38,.3)}
 .empty{text-align:center;padding:48px 24px;color:var(--faint)}
 .row-actions{display:flex;gap:4px;justify-content:flex-end}
 .status-pill{margin-left:auto;display:flex;align-items:center;gap:7px;padding:5px 11px;border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--dim)}
 .status-pill .d{width:7px;height:7px;border-radius:50%;background:var(--green)}
+.status-pill.off .d{background:var(--faint)}
 .header-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px}
 .conn-label{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:6px;background:var(--surface-2);border:1px solid var(--border);font-size:12px;font-weight:500}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+.stat-card{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:14px 16px;box-shadow:var(--shadow)}
+.stat-val{font-size:22px;font-weight:600;letter-spacing:-.02em}
+.stat-lbl{font-size:12px;color:var(--faint);margin-top:2px}
+.section{margin-bottom:28px}
+.section-title{font-size:13px;font-weight:600;color:var(--dim);margin-bottom:10px;text-transform:uppercase;letter-spacing:.03em}
 </style>
 </head>
 <body>
@@ -83,13 +91,15 @@ tr:last-child td{border-bottom:none}
     <nav style="padding:12px 0;flex:1">
       <button class="nav-item active" data-page="pipelines">Pipelines</button>
       <button class="nav-item" data-page="connectors">Connectors</button>
+      <button class="nav-item" data-page="runs">Runs</button>
+      <button class="nav-item" data-page="settings">Settings</button>
     </nav>
     <div style="padding:12px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--faint)">Local · dlt engine</div>
   </aside>
   <div id="main">
     <header id="topbar">
       <span id="top-title" style="font-weight:550">Pipelines</span>
-      <div class="status-pill"><span class="d"></span><span id="health-text">…</span></div>
+      <div class="status-pill" id="health-pill"><span class="d"></span><span id="health-text">…</span></div>
     </header>
     <div id="content"></div>
   </div>
@@ -103,13 +113,20 @@ tr:last-child td{border-bottom:none}
 <div id="toast"></div>
 <script>
 const API = '';
+const PAGE_TITLES = {pipelines:'Pipelines', connectors:'Connectors', runs:'Runs', settings:'Settings'};
+const CONNECTOR_ORDER = ['postgresql','mysql','rest_api','sql_database','click_uz','payme_uz','uzum_market','synthetic_volume'];
+
 let connectors = [];
+let destinations = [];
 let pipelines = [];
+let runs = [];
+let runStats = {};
+let scheduler = {};
+let telegramCfg = {configured:false};
 let page = 'pipelines';
 let selectedConnector = null;
 let step = 1;
-
-const CONNECTOR_ORDER = ['postgresql', 'mysql', 'rest_api', 'sql_database'];
+let pollTimers = {};
 
 function connectorLabel(key) {
   const m = connectors.find(x => x.key === key);
@@ -119,20 +136,18 @@ function connectorLabel(key) {
 function sortedConnectors() {
   const byKey = Object.fromEntries(connectors.map(c => [c.key, c]));
   const ordered = [];
-  for (const k of CONNECTOR_ORDER) {
-    if (byKey[k]) ordered.push(byKey[k]);
-  }
-  for (const c of connectors) {
-    if (!CONNECTOR_ORDER.includes(c.key)) ordered.push(c);
-  }
+  for (const k of CONNECTOR_ORDER) if (byKey[k]) ordered.push(byKey[k]);
+  for (const c of connectors) if (!CONNECTOR_ORDER.includes(c.key)) ordered.push(c);
   return ordered;
 }
 
 async function api(path, opts={}) {
-  const r = await fetch(API + path, {
-    headers: {'Content-Type': 'application/json', ...(opts.headers||{})},
-    ...opts,
-  });
+  const {headers: extraHeaders, ...rest} = opts;
+  const headers = {'Content-Type': 'application/json', ...(extraHeaders||{})};
+  const meta = document.querySelector('meta[name="uzpipe-api-key"]');
+  const key = meta && meta.getAttribute('content');
+  if (key) headers['X-API-Key'] = key;
+  const r = await fetch(API + path, { ...rest, headers });
   const text = await r.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
@@ -148,7 +163,7 @@ function toast(msg, type='ok') {
   el.className = 'toast ' + type;
   el.textContent = msg;
   document.getElementById('toast').appendChild(el);
-  setTimeout(() => el.remove(), 3500);
+  setTimeout(() => el.remove(), 4000);
 }
 
 function openDrawer() {
@@ -160,7 +175,6 @@ function closeDrawer() {
   document.getElementById('drawer').classList.remove('open');
   step = 1; selectedConnector = null;
 }
-
 document.getElementById('drawer-close').onclick = closeDrawer;
 document.getElementById('overlay').onclick = closeDrawer;
 
@@ -169,41 +183,99 @@ document.querySelectorAll('.nav-item').forEach(btn => {
     document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     page = btn.dataset.page;
-    document.getElementById('top-title').textContent = page === 'pipelines' ? 'Pipelines' : 'Connectors';
+    document.getElementById('top-title').textContent = PAGE_TITLES[page] || page;
     render();
   };
 });
 
+function fmtTime(iso) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d)) return iso;
+    return d.toLocaleString();
+  } catch { return iso; }
+}
+
+function fmtDur(s) {
+  if (s == null || s === '') return '—';
+  const n = Number(s);
+  if (n < 1) return (n * 1000).toFixed(0) + ' ms';
+  if (n < 60) return n.toFixed(1) + ' s';
+  return Math.floor(n / 60) + 'm ' + Math.round(n % 60) + 's';
+}
+
+function lastRunBadge(lr) {
+  if (!lr) return '<span class="badge dim"><span class="dot"></span>Hech qachon</span>';
+  if (lr.success && lr.quality_passed) return '<span class="badge ok"><span class="dot"></span>OK</span>';
+  if (lr.success) return '<span class="badge warn"><span class="dot"></span>Quality fail</span>';
+  return '<span class="badge err"><span class="dot"></span>Fail</span>';
+}
+
 async function loadAll() {
   try {
     const h = await api('/api/health');
+    const pill = document.getElementById('health-pill');
     document.getElementById('health-text').textContent = h.status === 'ok' ? 'API ishlayapti' : h.status;
+    pill.classList.toggle('off', h.status !== 'ok');
+    if (h.scheduler_running != null) scheduler = {running: h.scheduler_running, job_count: h.scheduler_jobs};
   } catch {
     document.getElementById('health-text').textContent = 'API offline';
+    document.getElementById('health-pill').classList.add('off');
   }
   try {
-    connectors = await api('/api/connectors');
-    pipelines = await api('/api/pipelines');
+    const [c, p, d] = await Promise.all([
+      api('/api/connectors'),
+      api('/api/pipelines'),
+      api('/api/destinations').catch(() => []),
+    ]);
+    connectors = c; pipelines = p; destinations = d;
   } catch (e) {
     toast('Yuklash xatosi: ' + e.message, 'err');
   }
   render();
 }
 
-function render() {
-  const c = document.getElementById('content');
-  if (page === 'connectors') {
-    const list = sortedConnectors();
-    c.innerHTML = `<div class="page-title">Connectors</div>
-      <div class="page-sub">Manifest-driven katalog — forma shu yerdan chiziladi</div>
-      <div class="cards">${list.map(x => `
-        <div class="card">
-          <div class="card-title">${x.label}</div>
-          <div class="card-desc">${x.description || ''}</div>
-          <div style="margin-top:10px;font-size:11.5px;color:var(--faint)">${x.category} · ${x.fields.length} maydon · <span class="mono">${x.key}</span></div>
-        </div>`).join('')}</div>`;
-    return;
+async function loadRuns() {
+  try {
+    runs = await api('/api/runs?limit=50');
+    runStats = await api('/api/runs/stats');
+  } catch (e) {
+    toast('Runs yuklanmadi: ' + e.message, 'err');
   }
+}
+
+async function loadSettings() {
+  try {
+    scheduler = await api('/api/scheduler');
+  } catch {}
+  try {
+    telegramCfg = await api('/api/settings/telegram');
+  } catch { telegramCfg = {configured: false}; }
+}
+
+function render() {
+  if (page === 'connectors') return renderConnectors();
+  if (page === 'runs') return renderRuns();
+  if (page === 'settings') return renderSettings();
+  renderPipelines();
+}
+
+function renderConnectors() {
+  const list = sortedConnectors();
+  const c = document.getElementById('content');
+  c.innerHTML = `<div class="page-title">Connectors</div>
+    <div class="page-sub">Manifest-driven katalog — forma shu yerdan chiziladi</div>
+    <div class="cards">${list.map(x => `
+      <div class="card" style="cursor:default">
+        <div class="card-title">${x.label}</div>
+        <div class="card-desc">${x.description || ''}</div>
+        <div style="margin-top:10px;font-size:11.5px;color:var(--faint)">${x.category} · ${x.fields.length} maydon · <span class="mono">${x.key}</span></div>
+      </div>`).join('')}</div>`;
+}
+
+function renderPipelines() {
+  const c = document.getElementById('content');
   c.innerHTML = `
     <div class="header-row">
       <div>
@@ -212,19 +284,24 @@ function render() {
       </div>
       <button class="btn btn-primary" id="btn-add">+ Yangi pipeline</button>
     </div>
-    ${pipelines.length === 0 ? `<div class="empty"><div style="font-weight:550;color:var(--dim);margin-bottom:4px">Hali pipeline yo'q</div>PostgreSQL, MySQL yoki REST API orqali yangi pipeline qo'shing</div>` : `
+    ${pipelines.length === 0 ? `<div class="empty"><div style="font-weight:550;color:var(--dim);margin-bottom:4px">Hali pipeline yo'q</div>PostgreSQL, MySQL, REST API yoki UZ connectorlar orqali qo'shing</div>` : `
     <div class="table-wrap"><table>
-      <thead><tr><th>Nom</th><th>Connector</th><th>Yangilangan</th><th></th></tr></thead>
-      <tbody>${pipelines.map(p => `
-        <tr>
-          <td><strong>${p.name}</strong></td>
-          <td><span class="conn-label">${connectorLabel(p.connector_key)}</span></td>
-          <td style="color:var(--faint)">${p.updated_at || '—'}</td>
+      <thead><tr><th>Nom</th><th>Connector</th><th>Oxirgi run</th><th>Qatorlar</th><th>Vaqt</th><th></th></tr></thead>
+      <tbody>${pipelines.map(p => {
+        const lr = p.last_run;
+        const rows = lr && lr.total_rows != null ? lr.total_rows : (lr && lr.row_counts ? Object.values(lr.row_counts).reduce((a,b)=>a+b,0) : '—');
+        return `<tr>
+          <td><strong>${esc(p.name)}</strong></td>
+          <td><span class="conn-label">${esc(connectorLabel(p.connector_key))}</span></td>
+          <td>${lastRunBadge(lr)}${lr && lr.finished_at ? `<div style="font-size:11.5px;color:var(--faint);margin-top:3px">${fmtTime(lr.finished_at)}</div>` : ''}</td>
+          <td class="mono">${rows}</td>
+          <td class="mono">${lr ? fmtDur(lr.duration_seconds) : '—'}</td>
           <td><div class="row-actions">
-            <button class="btn btn-outline" data-run="${p.name}">Run</button>
-            <button class="btn btn-danger" data-del="${p.name}">O'chir</button>
+            <button class="btn btn-outline btn-sm" data-run="${esc(p.name)}">Run</button>
+            <button class="btn btn-danger btn-sm" data-del="${esc(p.name)}">O'chir</button>
           </div></td>
-        </tr>`).join('')}
+        </tr>`;
+      }).join('')}
       </tbody>
     </table></div>`}`;
   const add = document.getElementById('btn-add');
@@ -233,21 +310,161 @@ function render() {
   c.querySelectorAll('[data-del]').forEach(b => b.onclick = () => delPipeline(b.dataset.del));
 }
 
+async function renderRuns() {
+  await loadRuns();
+  const c = document.getElementById('content');
+  const total = runStats.total_runs ?? runs.length;
+  const ok = runStats.successful_runs ?? runs.filter(r => r.success).length;
+  const fail = runStats.failed_runs ?? runs.filter(r => !r.success).length;
+  c.innerHTML = `
+    <div class="page-title">Runs</div>
+    <div class="page-sub">Oxirgi ishga tushirishlar tarixi</div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-val">${total}</div><div class="stat-lbl">Jami</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--green)">${ok}</div><div class="stat-lbl">Muvaffaqiyatli</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--red)">${fail}</div><div class="stat-lbl">Xato</div></div>
+    </div>
+    ${runs.length === 0 ? `<div class="empty">Hali run yo'q</div>` : `
+    <div class="table-wrap"><table>
+      <thead><tr><th>Pipeline</th><th>Status</th><th>Trigger</th><th>Qatorlar</th><th>Davomiylik</th><th>Vaqt</th></tr></thead>
+      <tbody>${runs.map(r => `
+        <tr>
+          <td><strong>${esc(r.pipeline_name)}</strong></td>
+          <td>${lastRunBadge(r)}</td>
+          <td class="mono">${esc(r.trigger || '—')}</td>
+          <td class="mono">${r.total_rows != null ? r.total_rows : '—'}</td>
+          <td class="mono">${fmtDur(r.duration_seconds)}</td>
+          <td style="color:var(--faint)">${fmtTime(r.finished_at)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`}`;
+}
+
+async function renderSettings() {
+  await loadSettings();
+  const c = document.getElementById('content');
+  const running = !!scheduler.running;
+  c.innerHTML = `
+    <div class="page-title">Settings</div>
+    <div class="page-sub">Scheduler va bildirishnomalar</div>
+    <div class="section">
+      <div class="section-title">Scheduler</div>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-val" style="font-size:16px">${running ? 'Ishlayapti' : "To'xtagan"}</div>
+          <div class="stat-lbl">${scheduler.job_count ?? 0} ta job</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" id="sched-start" ${running?'disabled':''}>Start</button>
+        <button class="btn btn-outline" id="sched-stop" ${running?'':'disabled'}>Stop</button>
+        <button class="btn btn-outline" id="sched-reload">Reload jobs</button>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">Telegram</div>
+      <p style="color:var(--dim);margin-bottom:12px">${telegramCfg.configured ? 'Bot token sozlangan (maxfiy).' : "Bot token hali yo'q."}</p>
+      <div class="field" style="max-width:360px">
+        <label>Bot token</label>
+        <input id="tg-token" type="password" placeholder="123456:ABC..." />
+        <div class="field-hint">ControlStore da shifrlangan saqlanadi</div>
+      </div>
+      <button class="btn btn-primary" id="tg-save">Saqlash</button>
+    </div>`;
+  document.getElementById('sched-start').onclick = async () => {
+    try { scheduler = await api('/api/scheduler/start', {method:'POST'}); toast('Scheduler ishga tushdi'); renderSettings(); }
+    catch(e){ toast(e.message,'err'); }
+  };
+  document.getElementById('sched-stop').onclick = async () => {
+    try { scheduler = await api('/api/scheduler/stop', {method:'POST'}); toast("Scheduler to'xtatildi"); renderSettings(); }
+    catch(e){ toast(e.message,'err'); }
+  };
+  document.getElementById('sched-reload').onclick = async () => {
+    try { scheduler = await api('/api/scheduler/reload', {method:'POST'}); toast('Jobs yangilandi'); renderSettings(); }
+    catch(e){ toast(e.message,'err'); }
+  };
+  document.getElementById('tg-save').onclick = async () => {
+    const token = document.getElementById('tg-token').value.trim();
+    if (!token) { toast('Token majburiy','err'); return; }
+    try {
+      telegramCfg = await api('/api/settings/telegram', {method:'PUT', body: JSON.stringify({bot_token: token})});
+      toast('Telegram sozlandi');
+      document.getElementById('tg-token').value = '';
+      renderSettings();
+    } catch(e){ toast(e.message,'err'); }
+  };
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 async function runPipeline(name, btn) {
   btn.disabled = true;
   btn.textContent = '…';
   try {
-    const r = await api('/api/pipelines/' + encodeURIComponent(name) + '/run', {method:'POST'});
-    const rows = Object.entries(r.row_counts || {}).map(([t,n]) => t + ': ' + n).join(', ') || '0 rows';
-    if (r.success && r.quality_passed) toast('✓ ' + name + ' — ' + rows, 'ok');
-    else if (r.success) toast('Yuklandi, lekin quality fail: ' + name, 'err');
-    else toast('Run muvaffaqiyatsiz: ' + name, 'err');
+    const job = await api('/api/pipelines/' + encodeURIComponent(name) + '/run/async', {method:'POST'});
+    const runId = job.run_id || job.id;
+    if (!runId) {
+      // fallback sync
+      const r = await api('/api/pipelines/' + encodeURIComponent(name) + '/run', {method:'POST'});
+      showRunResult(name, r);
+      pipelines = await api('/api/pipelines');
+      if (page === 'pipelines') renderPipelines();
+      return;
+    }
+    toast(name + ' ishga tushdi…');
+    pollRun(runId, name, btn);
   } catch (e) {
-    toast(e.message, 'err');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Run';
+    // async yo'q bo'lsa sync
+    try {
+      const r = await api('/api/pipelines/' + encodeURIComponent(name) + '/run', {method:'POST'});
+      showRunResult(name, r);
+      pipelines = await api('/api/pipelines');
+      if (page === 'pipelines') renderPipelines();
+    } catch (e2) {
+      toast(e2.message, 'err');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Run';
+    }
   }
+}
+
+function pollRun(runId, name, btn) {
+  if (pollTimers[runId]) clearInterval(pollTimers[runId]);
+  let n = 0;
+  pollTimers[runId] = setInterval(async () => {
+    n++;
+    try {
+      const job = await api('/api/runs/jobs/' + encodeURIComponent(runId));
+      if (job.status === 'running' || job.status === 'queued' || job.status === 'pending') {
+        if (n > 120) { clearInterval(pollTimers[runId]); btn.disabled=false; btn.textContent='Run'; toast('Timeout','err'); }
+        return;
+      }
+      clearInterval(pollTimers[runId]);
+      const result = job.result || job;
+      showRunResult(name, result);
+      pipelines = await api('/api/pipelines');
+      if (page === 'pipelines') renderPipelines();
+      btn.disabled = false;
+      btn.textContent = 'Run';
+    } catch (e) {
+      if (n > 5) {
+        clearInterval(pollTimers[runId]);
+        btn.disabled = false;
+        btn.textContent = 'Run';
+        toast(e.message, 'err');
+      }
+    }
+  }, 800);
+}
+
+function showRunResult(name, r) {
+  const rows = Object.entries(r.row_counts || {}).map(([t,n]) => t + ': ' + n).join(', ') || ((r.total_rows||0) + ' rows');
+  if (r.success && r.quality_passed) toast('✓ ' + name + ' — ' + rows, 'ok');
+  else if (r.success) toast('Yuklandi, lekin quality fail: ' + name, 'err');
+  else toast('Run muvaffaqiyatsiz: ' + name + (r.error ? ' — ' + r.error : ''), 'err');
 }
 
 async function delPipeline(name) {
@@ -256,7 +473,7 @@ async function delPipeline(name) {
     await api('/api/pipelines/' + encodeURIComponent(name), {method:'DELETE'});
     toast("O'chirildi: " + name);
     pipelines = await api('/api/pipelines');
-    render();
+    renderPipelines();
   } catch (e) { toast(e.message, 'err'); }
 }
 
@@ -289,40 +506,65 @@ function renderDrawer() {
     return;
   }
   const m = connectors.find(x => x.key === selectedConnector);
+  const destOpts = (destinations.length ? destinations : [{key:'duckdb',label:'DuckDB',needs_connection:false}])
+    .map(d => `<option value="${d.key}" data-needs="${d.needs_connection?1:0}">${d.label}</option>`).join('');
   body.innerHTML = `
     <div class="field"><label>Pipeline nomi</label>
       <input id="f-name" placeholder="masalan postgres_orders" />
       <div class="field-hint">Faqat harf, raqam, _ va -</div></div>
     ${(m?.fields||[]).map(f => fieldHtml(f)).join('')}
     <div class="field"><label>Destination</label>
-      <select id="f-dest">
-        <option value="duckdb">DuckDB (local)</option>
-      </select>
-      <div class="field-hint">MVP: local DuckDB. PostgreSQL destination keyinroq.</div></div>
+      <select id="f-dest">${destOpts}</select></div>
+    <div class="field" id="dest-conn-wrap" style="display:none">
+      <label id="dest-conn-label">Connection</label>
+      <input id="f-dest-conn" type="password" placeholder="" />
+      <div class="field-hint" id="dest-conn-help"></div>
+    </div>
     <div class="field"><label>Dataset nomi</label>
       <input id="f-dataset" value="raw" />
       <div class="field-hint">dlt schema / dataset nomi</div></div>
+    <div class="field"><label>Write disposition</label>
+      <select id="f-wd">
+        <option value="replace">replace</option>
+        <option value="append">append</option>
+        <option value="merge">merge</option>
+      </select></div>
   `;
   foot.innerHTML = `
     <button class="btn btn-outline" id="back2">Orqaga</button>
     <button class="btn btn-primary" id="save2">Saqlash</button>`;
   document.getElementById('back2').onclick = () => { step = 1; renderDrawer(); };
   document.getElementById('save2').onclick = savePipeline;
+  const destSel = document.getElementById('f-dest');
+  const syncDest = () => {
+    const d = destinations.find(x => x.key === destSel.value);
+    const wrap = document.getElementById('dest-conn-wrap');
+    if (d && d.needs_connection) {
+      wrap.style.display = 'block';
+      document.getElementById('dest-conn-label').textContent = d.connection_label || 'Connection';
+      document.getElementById('f-dest-conn').placeholder = d.connection_placeholder || '';
+      document.getElementById('dest-conn-help').textContent = d.connection_help || '';
+    } else {
+      wrap.style.display = 'none';
+    }
+  };
+  destSel.onchange = syncDest;
+  syncDest();
 }
 
 function fieldHtml(f) {
   const req = f.required ? ' *' : '';
   if (f.type === 'select') {
-    return `<div class="field"><label>${f.label}${req}</label>
-      <select id="f-${f.key}">${(f.options||[]).map(o =>
-        `<option value="${o.value}" ${f.default===o.value?'selected':''}>${o.label}</option>`).join('')}
+    return `<div class="field"><label>${esc(f.label)}${req}</label>
+      <select id="f-${esc(f.key)}">${(f.options||[]).map(o =>
+        `<option value="${esc(o.value)}" ${f.default===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}
       </select>
-      ${f.help_text?`<div class="field-hint">${f.help_text}</div>`:''}</div>`;
+      ${f.help_text?`<div class="field-hint">${esc(f.help_text)}</div>`:''}</div>`;
   }
   const type = f.type === 'password' ? 'password' : (f.type === 'number' ? 'number' : 'text');
-  return `<div class="field"><label>${f.label}${req}</label>
-    <input id="f-${f.key}" type="${type}" placeholder="${f.placeholder||''}" value="${f.default ?? ''}" />
-    ${f.help_text?`<div class="field-hint">${f.help_text}</div>`:''}</div>`;
+  return `<div class="field"><label>${esc(f.label)}${req}</label>
+    <input id="f-${esc(f.key)}" type="${type}" placeholder="${esc(f.placeholder||'')}" value="${esc(f.default ?? '')}" />
+    ${f.help_text?`<div class="field-hint">${esc(f.help_text)}</div>`:''}</div>`;
 }
 
 async function savePipeline() {
@@ -338,16 +580,22 @@ async function savePipeline() {
     if (f.secret) secrets[f.key] = v;
     else source_params[f.key] = v;
   }
+  const destKey = document.getElementById('f-dest').value;
+  const destConnEl = document.getElementById('f-dest-conn');
+  const dest = {
+    connector: destKey,
+    dataset_name: document.getElementById('f-dataset').value || 'raw',
+  };
+  if (destConnEl && destConnEl.offsetParent !== null && destConnEl.value) {
+    dest.connection = destConnEl.value;
+  }
   const body = {
     name,
     connector_key: selectedConnector,
     source_params,
     secrets,
-    destination: {
-      connector: document.getElementById('f-dest').value,
-      dataset_name: document.getElementById('f-dataset').value || 'raw',
-    },
-    write_disposition: 'replace',
+    destination: dest,
+    write_disposition: document.getElementById('f-wd').value || 'replace',
   };
   try {
     await api('/api/pipelines', {method:'POST', body: JSON.stringify(body)});
@@ -357,7 +605,7 @@ async function savePipeline() {
     page = 'pipelines';
     document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.page==='pipelines'));
     document.getElementById('top-title').textContent = 'Pipelines';
-    render();
+    renderPipelines();
   } catch (e) {
     toast(e.message, 'err');
   }

@@ -114,3 +114,12 @@ def test_delete_removes_pipeline(tmp_path) -> None:
 
     store.delete("test_pipeline")
     assert store.load("test_pipeline") is None
+
+
+def test_secret_setting_round_trip_not_plaintext(tmp_path) -> None:
+    store = _make_store(tmp_path)
+    store.set_secret_setting("telegram_bot_token", "BOT-SECRET")
+    assert store.get_secret_setting("telegram_bot_token") == "BOT-SECRET"
+    raw = store.get_setting("telegram_bot_token")
+    assert raw is not None
+    assert "BOT-SECRET" not in raw
