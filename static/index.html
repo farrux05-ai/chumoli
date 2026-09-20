@@ -151,13 +151,49 @@ tbody tr:hover{background:var(--surface-2)}
 /* Form */
 .field{margin-bottom:14px}
 .field label{display:block;font-size:12px;font-weight:600;color:var(--dim);margin-bottom:5px}
-.field input,.field select,.field textarea{width:100%;height:38px;border:1px solid var(--border);border-radius:8px;padding:0 12px;background:var(--surface);outline:none;transition:border .12s,box-shadow .12s;color:var(--text)}
+.field input:not([type=checkbox]):not([type=radio]),
+.field select,
+.field textarea{width:100%;height:38px;border:1px solid var(--border);border-radius:8px;padding:0 12px;background:var(--surface);outline:none;transition:border .12s,box-shadow .12s;color:var(--text)}
 .field textarea{height:auto;min-height:72px;padding:10px 12px;resize:vertical}
-.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);box-shadow:var(--ring)}
-.field input::placeholder,.field textarea::placeholder{color:var(--faint)}
+.field input:not([type=checkbox]):not([type=radio]):focus,
+.field select:focus,
+.field textarea:focus{border-color:var(--accent);box-shadow:var(--ring)}
+.field input:not([type=checkbox]):not([type=radio])::placeholder,
+.field textarea::placeholder{color:var(--faint)}
 .field-hint{font-size:11.5px;color:var(--faint);margin-top:5px;line-height:1.5}
 .field-ok{font-size:11.5px;color:var(--green);margin-top:5px}
 .field-err{font-size:11.5px;color:var(--red);margin-top:5px}
+
+/* SQL table picker */
+.sql-picker{border:1px solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden}
+.sql-picker-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.sql-picker-bar .sql-count{font-size:11.5px;color:var(--dim);font-weight:500}
+.sql-picker-bar .sql-actions{display:flex;gap:4px}
+.sql-picker-bar .sql-link{font-size:11.5px;font-weight:500;color:var(--accent-text);padding:3px 8px;border-radius:6px}
+.sql-picker-bar .sql-link:hover{background:var(--accent-soft)}
+.sql-picker-list{max-height:220px;overflow-y:auto;padding:6px}
+.sql-picker-list::-webkit-scrollbar{width:6px}
+.sql-picker-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px}
+.sql-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;cursor:pointer;user-select:none;transition:background .1s}
+.sql-row:hover{background:var(--hover)}
+.sql-row.is-on{background:var(--accent-soft)}
+.sql-row input[type=checkbox]{
+  appearance:none;-webkit-appearance:none;
+  width:16px;height:16px;flex-shrink:0;margin:0;
+  border:1.5px solid var(--border-s);border-radius:4px;
+  background:var(--surface);cursor:pointer;position:relative;
+  transition:border-color .12s,background .12s;
+}
+.sql-row input[type=checkbox]:checked{
+  background:var(--accent);border-color:var(--accent);
+}
+.sql-row input[type=checkbox]:checked::after{
+  content:'';position:absolute;left:4px;top:1px;
+  width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;
+  transform:rotate(45deg);
+}
+.sql-row .sql-name{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12.5px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sql-row.is-on .sql-name{color:var(--accent-text);font-weight:500}
 
 /* Step bar inside drawer */
 .step-bar{display:flex;gap:5px;margin-bottom:10px}
@@ -1138,23 +1174,38 @@ function renderStepTables(body,foot){
   if(isSql){
     const current=new Set(String(dv('f-table_names','')).split(',').map(s=>s.trim()).filter(Boolean));
     const tables=inspectedTables.length?inspectedTables:[...current];
+    const selectedN=[...current].filter(t=>tables.includes(t)).length;
     tablesBlock=`
       ${inspectedDbLabel?`<div class="field-hint" style="margin-bottom:8px">Manba: <strong>${esc(inspectedDbLabel)}</strong></div>`:''}
       <div class="field">
         <label>Jadvallar *</label>
         <input id="f-table_names" type="hidden" value="${esc(dv('f-table_names',''))}"/>
-        <div id="sql-tables" style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;max-height:200px;overflow-y:auto">
-          ${tables.length?tables.map(t=>`
-            <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:13px;color:var(--dim)">
-              <input type="checkbox" class="sql-tbl" value="${esc(t)}" ${current.has(t)?'checked':''} style="accent-color:var(--accent)"/>
-              <span class="mono" style="font-size:12.5px">${esc(t)}</span>
-            </label>`).join(''):
-            `<div class="field-hint" style="margin:0">
-              Jadvallar topilmadi — orqaga qaytib tekshiring yoki qo'lda yozing
-             </div>
-             <input id="f-table_names_manual" type="text" placeholder="orders, customers" value="${esc(dv('f-table_names',''))}" style="margin-top:8px"/>`}
-        </div>
-        <div class="field-hint">${tables.length?'Kerakli jadvallarni belgilang':'Vergul bilan ajrating'}</div>
+        ${tables.length?`
+        <div class="sql-picker" id="sql-tables">
+          <div class="sql-picker-bar">
+            <span class="sql-count" id="sql-count">${selectedN} / ${tables.length} tanlangan</span>
+            <div class="sql-actions">
+              <button type="button" class="sql-link" id="sql-all">Hammasi</button>
+              <button type="button" class="sql-link" id="sql-none">Hech biri</button>
+            </div>
+          </div>
+          <div class="sql-picker-list">
+            ${tables.map(t=>{
+              const on=current.has(t);
+              return `<label class="sql-row${on?' is-on':''}">
+                <input type="checkbox" class="sql-tbl" value="${esc(t)}" ${on?'checked':''}/>
+                <span class="sql-name" title="${esc(t)}">${esc(t)}</span>
+              </label>`;
+            }).join('')}
+          </div>
+        </div>`:
+        `<div class="sql-picker" id="sql-tables" style="padding:12px">
+          <div class="field-hint" style="margin:0 0 8px">
+            Jadvallar topilmadi — orqaga qaytib tekshiring yoki qo'lda yozing
+          </div>
+          <input id="f-table_names_manual" type="text" placeholder="orders, customers" value="${esc(dv('f-table_names',''))}"/>
+        </div>`}
+        <div class="field-hint">${tables.length?'Qatorni bosib tanlang':'Vergul bilan ajrating'}</div>
       </div>
       ${fields.filter(f=>f.key==='cursor_column').map(f=>fieldHtml(f)).join('')}`;
   }else{
@@ -1195,11 +1246,30 @@ function renderStepTables(body,foot){
     }
     step=4; renderDrawer();
   };
+
+  function syncSqlPicker(){
+    const box=document.getElementById('sql-tables');
+    if(!box) return;
+    const cbs=[...box.querySelectorAll('.sql-tbl')];
+    const sel=cbs.filter(c=>c.checked).map(c=>c.value);
+    draft['f-table_names']=sel.join(', ');
+    const countEl=document.getElementById('sql-count');
+    if(countEl) countEl.textContent=sel.length+' / '+cbs.length+' tanlangan';
+    cbs.forEach(cb=>{
+      const row=cb.closest('.sql-row');
+      if(row) row.classList.toggle('is-on', cb.checked);
+    });
+  }
   document.getElementById('sql-tables')?.querySelectorAll('.sql-tbl').forEach(cb=>{
-    cb.onchange=()=>{
-      const sel=[...document.getElementById('sql-tables').querySelectorAll('.sql-tbl:checked')].map(x=>x.value);
-      draft['f-table_names']=sel.join(', ');
-    };
+    cb.addEventListener('change', syncSqlPicker);
+  });
+  document.getElementById('sql-all')?.addEventListener('click',()=>{
+    document.querySelectorAll('#sql-tables .sql-tbl').forEach(c=>{ c.checked=true; });
+    syncSqlPicker();
+  });
+  document.getElementById('sql-none')?.addEventListener('click',()=>{
+    document.querySelectorAll('#sql-tables .sql-tbl').forEach(c=>{ c.checked=false; });
+    syncSqlPicker();
   });
 }
 
