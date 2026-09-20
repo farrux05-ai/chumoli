@@ -1189,6 +1189,7 @@ function renderStepConnection(body,foot){
   if(isSql){
     if(testState==='ok') statusHtml=`<div class="field-ok">✓ Ulanish tasdiqlandi${inspectedTables.length?' — '+inspectedTables.length+' jadval':''}</div>`;
     else if(testState==='fail') statusHtml=`<div class="field-err">Ulanish muvaffaqiyatsiz — qayta urinib ko'ring</div>`;
+    else statusHtml=`<div class="field-hint" style="margin-top:6px">Keyingi bosilganda ulanish avtomatik tekshiriladi</div>`;
   }
   body.innerHTML=stepBarHtml(2,4)+`
     <div class="field">
@@ -1198,33 +1199,43 @@ function renderStepConnection(body,foot){
     </div>
     ${fieldsToShow.map(f=>fieldHtml(f)).join('')}
     ${isSql?`<button type="button" class="btn btn-outline" id="btn-inspect" style="width:100%;margin-top:4px">Ulanishni tekshirish</button>${statusHtml}`:''}`;
-  // Keep Next enabled if already verified — going back from step 3 must not lock the user
-  const canNext=isSql?(testState==='ok'):true;
-  foot.innerHTML=`<button class="btn btn-ghost" id="back2">← Orqaga</button><button class="btn btn-primary" id="next2" ${canNext?'':'disabled'}>Keyingi →</button>`;
+  // Next always enabled — SQL will auto-inspect on click if needed
+  foot.innerHTML=`<button class="btn btn-ghost" id="back2">← Orqaga</button><button class="btn btn-primary" id="next2">Keyingi →</button>`;
   document.getElementById('back2').onclick=()=>{ captureDraft(); step=1; renderDrawer(); };
-  document.getElementById('next2').onclick=()=>{
+  document.getElementById('next2').onclick=async ()=>{
     const nameEl=document.getElementById('f-name');
     const name=((nameEl&&nameEl.value)||draft['f-name']||editingName||'').toString().trim();
     if(!name){ toast('Pipeline nomi majburiy','err'); return; }
     draft['f-name']=name;
-    // Preserve connection string from live input if typed
     const connEl=document.getElementById('f-connection_string');
     if(connEl&&connEl.value) draft['f-connection_string']=connEl.value;
-    if(isSql&&testState!=='ok'){ toast("Avval ulanishni tekshiring",'err'); return; }
-    if(isSql&&!inspectedTables.length&&testState==='ok'){
-      // Still allow next — user can type tables manually on step 3
+    if(isSql){
+      const conn=(connEl&&connEl.value.trim())||(draft['f-connection_string']||'');
+      if(!conn){ toast('Connection string kiriting','err'); return; }
+      // Auto-inspect if not yet verified
+      if(testState!=='ok'){
+        const n2=document.getElementById('next2');
+        if(n2){ n2.disabled=true; n2.textContent='Tekshirilmoqda…'; }
+        try{
+          await runSqlInspect();
+          if(testState!=='ok'){
+            if(n2){ n2.disabled=false; n2.textContent='Keyingi →'; }
+            return;
+          }
+        }catch(e){
+          if(n2){ n2.disabled=false; n2.textContent='Keyingi →'; }
+          return;
+        }
+      }
     }
     step=3; renderDrawer();
   };
   document.getElementById('btn-inspect')?.addEventListener('click',runSqlInspect);
+  // Track last verified connection to avoid false invalidation from password re-render
   document.getElementById('f-connection_string')?.addEventListener('input',()=>{
-    // Only invalidate if the user actually changed the value away from what was verified
     const el=document.getElementById('f-connection_string');
-    if(testState==='ok'&&el&&el.value){
+    if(testState==='ok'&&el&&el.value&&el.value!==(draft['f-connection_string']||'')){
       testState='idle'; inspectedTables=[]; inspectedDbLabel="";
-      const n2=document.getElementById('next2');
-      if(n2) n2.disabled=true;
-      // Clear ok status text
       const ok=document.querySelector('.field-ok');
       if(ok) ok.remove();
     }
@@ -1573,17 +1584,22 @@ function fieldHtml(f){
 
 async function runSqlInspect(){
   const el=document.getElementById('f-connection_string');
-  const conn=el?el.value.trim():(draft['f-connection_string']||'');
-  if(!conn){ toast('Connection string kiriting','err'); return; }
-  if(el?.value) draft['f-connection_string']=el.value;
+  // Password field is cleared on re-render — prefer live value, else draft
+  const live=(el&&el.value)?el.value.trim():'';
+  const conn=live||(draft['f-connection_string']||'').trim();
+  if(!conn){ toast('Connection string kiriting','err'); testState='fail'; return; }
+  if(live) draft['f-connection_string']=live;
   const btn=document.getElementById('btn-inspect');
   if(btn){ btn.disabled=true; btn.textContent='Tekshirilmoqda…'; }
+  const prevState=testState;
   testState='idle';
   try{
     const res=await api('/api/connectors/sql_database/inspect',{method:'POST',body:JSON.stringify({connection_string:conn})});
     inspectedTables=res.tables||[];
     inspectedDbLabel=res.database||'';
     testState='ok';
+    // Keep connection in draft so Back/Next never loses it
+    draft['f-connection_string']=conn;
     const dbLabel=inspectedDbLabel?` (${inspectedDbLabel})`:'';
     toast(inspectedTables.length
       ? (inspectedTables.length+' jadval topildi'+dbLabel)
