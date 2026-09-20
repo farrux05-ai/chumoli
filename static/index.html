@@ -1094,6 +1094,10 @@ function captureDraft(){
   document.querySelectorAll('#drawer-body [id^="f-"]').forEach(el=>{
     if(el.type==='checkbox') draft[el.id]=el.checked;
     else if(el.type==='password'){ if(el.value) draft[el.id]=el.value; }
+    else if(el.readOnly || el.disabled){
+      // Edit mode: empty readonly must not wipe draft (e.g. pipeline name)
+      if(el.value) draft[el.id]=el.value;
+    }
     else draft[el.id]=el.value;
   });
 }
@@ -1161,7 +1165,7 @@ function renderStepConnection(body,foot){
   body.innerHTML=stepBarHtml(2,4)+`
     <div class="field">
       <label>Pipeline nomi</label>
-      <input id="f-name" placeholder="masalan postgres_orders" value="${esc(dv('f-name',''))}" ${editingName?'readonly':''}/>
+      <input id="f-name" placeholder="masalan postgres_orders" value="${esc(editingName||dv('f-name',''))}" ${editingName?'readonly':''}/>
       <div class="field-hint">${editingName?"Nom o'zgartirilmaydi":'Faqat harf, raqam, _ va -'}</div>
     </div>
     ${fieldsToShow.map(f=>fieldHtml(f)).join('')}
@@ -1170,8 +1174,9 @@ function renderStepConnection(body,foot){
   foot.innerHTML=`<button class="btn btn-ghost" id="back2">← Orqaga</button><button class="btn btn-primary" id="next2" ${canNext?'':'disabled'}>Keyingi →</button>`;
   document.getElementById('back2').onclick=()=>{ step=1; renderDrawer(); };
   document.getElementById('next2').onclick=()=>{
-    const name=(document.getElementById('f-name')||{}).value||'';
-    if(!name.trim()){ toast('Pipeline nomi majburiy','err'); return; }
+    const name=((document.getElementById('f-name')||{}).value||draft['f-name']||editingName||'').toString().trim();
+    if(!name){ toast('Pipeline nomi majburiy','err'); return; }
+    draft['f-name']=name;
     if(isSql&&testState!=='ok'){ toast("Avval ulanishni tekshiring",'err'); return; }
     step=3; renderDrawer();
   };
