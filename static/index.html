@@ -1608,6 +1608,9 @@ function renderStepDestAndSave(body,foot){
 
   const destSel=document.getElementById('f-dest');
   const destMode=document.getElementById('f-dest-mode');
+  // Per-destination connection cache — switching PG→ClickHouse must not leak the URL
+  if(!draft._destConnByKey) draft._destConnByKey={};
+  let _lastDestKey=destSel?.value||'duckdb';
   const syncDest=()=>{
     const key=destSel?.value||'duckdb';
     const d=destinations.find(x=>x.key===key);
@@ -1615,6 +1618,12 @@ function renderStepDestAndSave(body,foot){
     const fmtWrap=document.getElementById('dest-format-wrap');
     const connEl=document.getElementById('f-dest-conn');
     const isFs=key==='filesystem';
+    // Persist previous destination's connection before switching
+    if(connEl && _lastDestKey && _lastDestKey!==key){
+      draft._destConnByKey[_lastDestKey]=connEl.value||'';
+    }
+    _lastDestKey=key;
+    draft['f-dest']=key;
     if(fmtWrap) fmtWrap.style.display=isFs?'block':'none';
     // Filesystem: always show optional path (even if needs_connection=false)
     if(d?.needs_connection || isFs){
@@ -1623,9 +1632,17 @@ function renderStepDestAndSave(body,foot){
       if(connEl){
         connEl.placeholder=d?.connection_placeholder||'';
         connEl.type=isFs?'text':'password';
+        // Restore this destination's own value (not the previous one)
+        const cached=draft._destConnByKey[key];
+        const fallback=(key===draft['f-dest'] && draft['f-dest-conn'] && !draft._destConnByKey[key] && Object.keys(draft._destConnByKey).length===0)?(draft['f-dest-conn']||''):'';
+        connEl.value=(cached!==undefined)?cached:(fallback||'');
+        draft._destConnByKey[key]=connEl.value;
       }
       document.getElementById('dest-conn-help').textContent=d?.connection_help||'';
-    }else{ wrap.style.display='none'; }
+    }else{
+      wrap.style.display='none';
+      if(connEl) connEl.value='';
+    }
   };
   const syncDestMode=()=>{
     const saved=destMode?.value==='saved';
@@ -1634,7 +1651,19 @@ function renderStepDestAndSave(body,foot){
     if(sw) sw.style.display=saved?'block':'none';
     if(nw) nw.style.display=saved?'none':'block';
   };
-  if(destSel){ destSel.onchange=syncDest; syncDest(); }
+  if(destSel){
+    destSel.onchange=()=>{ syncDest(); };
+    // Keep cache in sync while typing
+    const connEl=document.getElementById('f-dest-conn');
+    if(connEl){
+      connEl.addEventListener('input',()=>{
+        const k=destSel.value||'duckdb';
+        draft._destConnByKey[k]=connEl.value||'';
+        draft['f-dest-conn']=connEl.value||'';
+      });
+    }
+    syncDest();
+  }
   if(destMode){ destMode.onchange=syncDestMode; syncDestMode(); }
 
   const sk=document.getElementById('f-sched-kind');
@@ -1790,7 +1819,14 @@ async function savePipeline(){
     const destKey=document.getElementById('f-dest')?.value||'duckdb';
     const destConnEl=document.getElementById('f-dest-conn');
     dest={connector:destKey,dataset_name:(document.getElementById('f-dataset')||{}).value||'raw'};
-    if(destConnEl&&destConnEl.offsetParent!==null&&destConnEl.value) dest.connection=destConnEl.value;
+    // Prefer live input for current dest; fall back to per-key cache (never leak other dest URLs)
+    let connVal='';
+    if(destConnEl&&destConnEl.offsetParent!==null){
+      connVal=(destConnEl.value||'').trim();
+    }else if(draft._destConnByKey&&draft._destConnByKey[destKey]){
+      connVal=String(draft._destConnByKey[destKey]||'').trim();
+    }
+    if(connVal) dest.connection=connVal;
     if(destKey==='filesystem'){
       const ff=(document.getElementById('f-file-format')||{}).value||'csv';
       dest.file_format=ff;

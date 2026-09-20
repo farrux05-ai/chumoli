@@ -65,3 +65,14 @@ def test_destination_connection_encrypted_not_in_config_json(tmp_path) -> None:
     loaded = store.load("dest_sec")
     assert loaded is not None
     assert loaded.config.destination.connection == "postgresql://u:secretpass@host/db"
+
+
+def test_dlt_dest_alias_postgresql_to_postgres() -> None:
+    """Catalog key postgresql must map to dlt.destinations.postgres."""
+    from chumoli.core.pipeline_runner import _DLT_DEST_ALIASES
+
+    assert _DLT_DEST_ALIASES.get("postgresql") == "postgres"
+    # duckdb / filesystem / clickhouse use same name in dlt
+    assert "duckdb" not in _DLT_DEST_ALIASES
+    assert "filesystem" not in _DLT_DEST_ALIASES
+    assert "clickhouse" not in _DLT_DEST_ALIASES

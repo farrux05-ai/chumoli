@@ -15,8 +15,10 @@ Strategiya: sifat > son, UZ bozorida haqiqiy ehtiyoj.
 Boshqa dlt destinationlar (BigQuery, Snowflake, …) keyinroq
 mijoz so'raganda qo'shiladi — katalog to'ldirish uchun emas.
 
-`key` qiymatlari dlt.destinations modulidagi nomlar bilan
-bir xil — pipeline_runner qo'shimcha mapping qilmaydi.
+`key` — UI/katalog nomi. dlt moduli bilan farq qilsa
+(masalan postgresql → postgres) pipeline_runner._DLT_DEST_ALIASES
+orqali map qilinadi. Catalog key o'zgarmaydi (saqlangan pipeline'lar
+va testlar uchun barqaror).
 """
 
 from __future__ import annotations

@@ -52,6 +52,13 @@ class RunResult:
         return self.total_rows / self.duration_seconds
 
 
+# UI/catalog keys → dlt.destinations attribute names (when they differ).
+# Catalog keeps user-facing names (postgresql); dlt module uses postgres.
+_DLT_DEST_ALIASES: dict[str, str] = {
+    "postgresql": "postgres",
+}
+
+
 def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
     from chumoli.core.paths import (
         ensure_runtime_dirs,
@@ -63,6 +70,7 @@ def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
     ensure_runtime_dirs()
     dest_key = config.destination.connector
     connection = config.destination.connection
+    dlt_key = _DLT_DEST_ALIASES.get(dest_key, dest_key)
 
     # DuckDB without an explicit path used to write <cwd>/<name>.duckdb — force under CHUMOLI_HOME/data
     if dest_key == "duckdb":
@@ -73,10 +81,16 @@ def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
         bucket_url = resolve_filesystem_url(connection, config.name)
         destination: Any = dlt.destinations.filesystem(bucket_url=bucket_url)
     elif connection:
-        destination_factory = getattr(dlt.destinations, dest_key)
+        try:
+            destination_factory = getattr(dlt.destinations, dlt_key)
+        except AttributeError as e:
+            raise ValueError(
+                f"dlt destination '{dest_key}' (dlt key '{dlt_key}') topilmadi. "
+                f"Kerak bo'lsa: pip install \"dlt[{dlt_key}]\""
+            ) from e
         destination = destination_factory(credentials=connection)
     else:
-        destination = dest_key
+        destination = dlt_key
 
     pdir = pipelines_dir()
     return dlt.pipeline(
