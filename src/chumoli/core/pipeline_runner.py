@@ -52,7 +52,12 @@ class RunResult:
 
 
 def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
-    from chumoli.core.paths import ensure_runtime_dirs, pipelines_dir, resolve_duckdb_path
+    from chumoli.core.paths import (
+        ensure_runtime_dirs,
+        pipelines_dir,
+        resolve_duckdb_path,
+        resolve_filesystem_url,
+    )
 
     ensure_runtime_dirs()
     dest_key = config.destination.connector
@@ -62,13 +67,13 @@ def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
     if dest_key == "duckdb":
         connection = resolve_duckdb_path(connection or "", config.name)
 
-    destination_kwargs: dict[str, Any] = {}
-    if connection:
-        destination_kwargs["credentials"] = connection
-
-    if destination_kwargs:
+    if dest_key == "filesystem":
+        # bucket_url: local folder or s3://… (not credentials=)
+        bucket_url = resolve_filesystem_url(connection, config.name)
+        destination: Any = dlt.destinations.filesystem(bucket_url=bucket_url)
+    elif connection:
         destination_factory = getattr(dlt.destinations, dest_key)
-        destination: Any = destination_factory(**destination_kwargs)
+        destination = destination_factory(credentials=connection)
     else:
         destination = dest_key
 
@@ -150,11 +155,21 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
 
     t0 = perf_counter()
     _set_run_step(name, "run")
-    load_info = pipeline.run(
-        source,
-        write_disposition=stored.config.write_disposition.value,
-        primary_key=stored.config.primary_key or None,
-    )
+    run_kwargs: dict[str, Any] = {
+        "write_disposition": stored.config.write_disposition.value,
+        "primary_key": stored.config.primary_key or None,
+    }
+    # Filesystem: explicit loader format (csv default for local-friendly exports)
+    dest = stored.config.destination
+    if dest.connector == "filesystem":
+        fmt = dest.file_format or "csv"
+        run_kwargs["loader_file_format"] = fmt
+        # CSV: uncompressed so Excel opens without gunzip
+        if fmt == "csv":
+            import os
+            os.environ.setdefault("NORMALIZE__DATA_WRITER__DISABLE_COMPRESSION", "true")
+
+    load_info = pipeline.run(source, **run_kwargs)
     duration = perf_counter() - t0
 
     load_succeeded = not load_info.has_failed_jobs

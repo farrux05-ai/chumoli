@@ -1069,6 +1069,7 @@ async function startEdit(name){
     const dest=cfg.destination||{};
     draft['f-dest-mode']='new'; draft['f-dest']=dest.connector||'duckdb';
     draft['f-dataset']=dest.dataset_name||'raw';
+    draft['f-file-format']=dest.file_format||'csv';
     draft['f-wd']=cfg.write_disposition||'replace';
     draft['f-pk']=(cfg.primary_key||[]).join(', ');
     const sch=cfg.schedule||{};
@@ -1330,7 +1331,16 @@ function renderStepDestAndSave(body,foot){
       <div class="field">
         <label>Dataset nomi</label>
         <input id="f-dataset" value="${esc(dv('f-dataset','raw'))}"/>
-        <div class="field-hint">dlt schema nomi</div>
+        <div class="field-hint">dlt schema / papka prefiksi</div>
+      </div>
+      <div class="field" id="dest-format-wrap" style="display:none">
+        <label>Fayl formati</label>
+        <select id="f-file-format">
+          <option value="csv" ${dv('f-file-format','csv')==='csv'?'selected':''}>CSV — Excel / oddiy ochish</option>
+          <option value="parquet" ${dv('f-file-format','csv')==='parquet'?'selected':''}>Parquet — data lake / S3</option>
+          <option value="jsonl" ${dv('f-file-format','csv')==='jsonl'?'selected':''}>JSONL — qatorma-qator JSON</option>
+        </select>
+        <div class="field-hint">Lokal uchun CSV tavsiya; S3/muhandislik uchun Parquet</div>
       </div>
     </div>
 
@@ -1405,13 +1415,22 @@ function renderStepDestAndSave(body,foot){
   const destSel=document.getElementById('f-dest');
   const destMode=document.getElementById('f-dest-mode');
   const syncDest=()=>{
-    const d=destinations.find(x=>x.key===destSel?.value);
+    const key=destSel?.value||'duckdb';
+    const d=destinations.find(x=>x.key===key);
     const wrap=document.getElementById('dest-conn-wrap');
-    if(d?.needs_connection){
+    const fmtWrap=document.getElementById('dest-format-wrap');
+    const connEl=document.getElementById('f-dest-conn');
+    const isFs=key==='filesystem';
+    if(fmtWrap) fmtWrap.style.display=isFs?'block':'none';
+    // Filesystem: always show optional path (even if needs_connection=false)
+    if(d?.needs_connection || isFs){
       wrap.style.display='block';
-      document.getElementById('dest-conn-label').textContent=d.connection_label||'Connection';
-      document.getElementById('f-dest-conn').placeholder=d.connection_placeholder||'';
-      document.getElementById('dest-conn-help').textContent=d.connection_help||'';
+      document.getElementById('dest-conn-label').textContent=d?.connection_label||'Connection';
+      if(connEl){
+        connEl.placeholder=d?.connection_placeholder||'';
+        connEl.type=isFs?'text':'password';
+      }
+      document.getElementById('dest-conn-help').textContent=d?.connection_help||'';
     }else{ wrap.style.display='none'; }
   };
   const syncDestMode=()=>{
@@ -1506,6 +1525,10 @@ async function savePipeline(){
     const destConnEl=document.getElementById('f-dest-conn');
     dest={connector:destKey,dataset_name:(document.getElementById('f-dataset')||{}).value||'raw'};
     if(destConnEl&&destConnEl.offsetParent!==null&&destConnEl.value) dest.connection=destConnEl.value;
+    if(destKey==='filesystem'){
+      const ff=(document.getElementById('f-file-format')||{}).value||'csv';
+      dest.file_format=ff;
+    }
   }
   const pkRaw=((document.getElementById('f-pk')||{}).value||'').trim();
   const primary_key=pkRaw?pkRaw.split(',').map(s=>s.trim()).filter(Boolean):[];

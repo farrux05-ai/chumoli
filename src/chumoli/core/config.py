@@ -36,6 +36,22 @@ class DestinationConfig(BaseModel):
     connector: str = Field(..., description="duckdb|postgresql|clickhouse|filesystem")
     connection: str | None = Field(default=None)
     dataset_name: str = Field(default="raw")
+    # filesystem only: csv (Excel-friendly default) | parquet | jsonl
+    file_format: str | None = Field(
+        default=None,
+        description="Loader file format for filesystem destination",
+    )
+
+    @field_validator("file_format")
+    @classmethod
+    def _file_format_ok(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return None
+        allowed = {"csv", "parquet", "jsonl"}
+        low = v.strip().lower()
+        if low not in allowed:
+            raise ValueError(f"file_format faqat {sorted(allowed)} bo'lishi mumkin")
+        return low
 
 
 class QualityConfig(BaseModel):

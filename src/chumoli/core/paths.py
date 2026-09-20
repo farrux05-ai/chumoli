@@ -55,11 +55,15 @@ def examples_dir() -> Path:
     return chumoli_home() / "examples"
 
 
+def exports_dir() -> Path:
+    return chumoli_home() / "exports"
+
+
 def ensure_runtime_dirs() -> Path:
     """Create home + data + pipelines + examples with restrictive mode."""
     home = chumoli_home()
     home.mkdir(mode=0o700, parents=True, exist_ok=True)
-    for sub in (data_dir(), pipelines_dir(), examples_dir()):
+    for sub in (data_dir(), pipelines_dir(), examples_dir(), exports_dir()):
         sub.mkdir(mode=0o700, parents=True, exist_ok=True)
     return home
 
@@ -94,4 +98,37 @@ def resolve_duckdb_path(connection: str, pipeline_name: str | None = None) -> st
     if not path.is_absolute():
         path = data_dir() / path
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return str(path.resolve())
+
+
+def default_filesystem_path(pipeline_name: str) -> str:
+    """Local export folder: $CHUMOLI_HOME/exports/<pipeline>/"""
+    ensure_runtime_dirs()
+    path = exports_dir() / safe_pipeline_filename(pipeline_name)
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return str(path.resolve())
+
+
+def resolve_filesystem_url(connection: str | None, pipeline_name: str) -> str:
+    """Normalize filesystem destination URL/path.
+
+    - empty → exports/<pipeline>/
+    - s3:// gs:// az:// hf:// → as-is
+    - ~/... → expand
+    - relative → under exports/
+    - absolute local path → as-is (mkdir parent)
+    """
+    ensure_runtime_dirs()
+    raw = (connection or "").strip()
+    if not raw:
+        return default_filesystem_path(pipeline_name)
+
+    lower = raw.lower()
+    if lower.startswith(("s3://", "gs://", "gcs://", "az://", "abfss://", "hf://", "file://")):
+        return raw
+
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        path = exports_dir() / path
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
     return str(path.resolve())

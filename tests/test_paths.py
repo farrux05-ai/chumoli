@@ -52,3 +52,38 @@ def test_absolute_path_preserved(tmp_path, monkeypatch) -> None:
     abs_p = tmp_path / "elsewhere" / "x.duckdb"
     path = resolve_duckdb_path(str(abs_p), "p")
     assert Path(path) == abs_p.resolve()
+
+
+def test_exports_dir_and_filesystem_resolve(tmp_path, monkeypatch) -> None:
+    from chumoli.core.paths import (
+        default_filesystem_path,
+        exports_dir,
+        resolve_filesystem_url,
+    )
+
+    monkeypatch.setenv("CHUMOLI_HOME", str(tmp_path / "h"))
+    p = default_filesystem_path("demo_rest")
+    assert "exports" in p
+    assert p.endswith("demo_rest") or p.rstrip("/").endswith("demo_rest")
+    assert Path(p).is_dir()
+
+    rel = resolve_filesystem_url("my_out", "p1")
+    assert str(exports_dir()) in rel
+
+    s3 = resolve_filesystem_url("s3://bucket/prefix", "p1")
+    assert s3 == "s3://bucket/prefix"
+
+    empty = resolve_filesystem_url("", "orders_pipe")
+    assert "orders_pipe" in empty
+
+
+def test_destination_file_format_validation() -> None:
+    from chumoli.core.config import DestinationConfig
+
+    d = DestinationConfig(connector="filesystem", file_format="CSV")
+    assert d.file_format == "csv"
+    try:
+        DestinationConfig(connector="filesystem", file_format="avro")
+        raise AssertionError("should reject")
+    except Exception:
+        pass

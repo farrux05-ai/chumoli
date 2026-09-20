@@ -63,12 +63,12 @@ DESTINATION_CATALOG: list[DestinationSpec] = [
     ),
     DestinationSpec(
         key="filesystem",
-        label="Filesystem / S3",
-        description="Local papka yoki s3:// / gs:// / az://",
-        needs_connection=True,
-        connection_placeholder="/tmp/chumoli_data yoki s3://bucket/prefix",
-        connection_help="Local path yoki cloud bucket URL (dlt filesystem).",
-        connection_label="Path / bucket URL",
+        label="Fayl (CSV / Parquet)",
+        description="Lokal papka yoki s3:// — CSV (Excel) yoki Parquet",
+        needs_connection=False,
+        connection_placeholder="Bo'sh = ~/.chumoli/exports/<pipeline>/  yoki  s3://bucket/prefix",
+        connection_help="Ixtiyoriy. Bo'sh qoldirilsa $CHUMOLI_HOME/exports/<pipeline>/ ga yoziladi. S3/GCS ham mumkin.",
+        connection_label="Papka yoki bucket URL",
     ),
     DestinationSpec(
         key="clickhouse",
