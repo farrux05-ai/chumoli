@@ -365,7 +365,10 @@ async function api(path,opts={}){
   try{ data=text?JSON.parse(text):null; }catch{ data=text; }
   if(!r.ok){
     const msg=(data&&(data.detail||data.validation_errors||data.message))||text||r.statusText;
-    throw new Error(typeof msg==='string'?msg:JSON.stringify(msg));
+    const err=new Error(typeof msg==='string'?msg:JSON.stringify(msg));
+    err.status=r.status;
+    err.data=data;
+    throw err;
   }
   return data;
 }
@@ -535,6 +538,7 @@ function renderPipelines(){
             <div class="row-actions">
               <button class="btn btn-outline btn-sm" data-run="${esc(p.name)}">▶ Run</button>
               <button class="btn btn-ghost btn-sm" data-edit="${esc(p.name)}">Tahrir</button>
+              ${lr&&lr.success!==false?`<button class="btn btn-ghost btn-sm" data-preview="${esc(p.name)}" title="Ma'lumot ko'rish">👁</button>`:''}
               ${lr&&lr.success===false?`<button class="btn btn-outline btn-sm" style="color:var(--amber);border-color:rgba(217,119,6,.3)" data-recover="${esc(p.name)}">Tiklash</button>`:''}
               <button class="btn btn-danger btn-sm" data-del="${esc(p.name)}">✕</button>
             </div>
@@ -546,8 +550,28 @@ function renderPipelines(){
   document.getElementById('btn-add').onclick=startAdd;
   c.querySelectorAll('[data-run]').forEach(b=>b.onclick=()=>runPipeline(b.dataset.run,b));
   c.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>startEdit(b.dataset.edit));
+  c.querySelectorAll('[data-preview]').forEach(b=>b.onclick=()=>previewPipeline(b.dataset.preview));
   c.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delPipeline(b.dataset.del));
   c.querySelectorAll('[data-recover]').forEach(b=>b.onclick=()=>openRecover(b.dataset.recover));
+}
+
+async function previewPipeline(name){
+  try{
+    const res=await api('/api/pipelines/'+encodeURIComponent(name)+'/preview?limit=10');
+    if(res.error&&(!res.tables||!Object.keys(res.tables).length)){
+      toast(res.error,'err'); return;
+    }
+    const tables=res.tables||{};
+    const names=Object.keys(tables);
+    if(!names.length){ toast('Ko‘rsatish uchun ma’lumot yo‘q','err'); return; }
+    let msg=names.map(t=>{
+      const info=tables[t];
+      if(info.error) return t+': '+info.error;
+      const n=(info.rows||[]).length;
+      return t+': '+n+' qator (preview)';
+    }).join(' · ');
+    toast(name+' — '+msg,'ok');
+  }catch(e){ toast(e.message,'err'); }
 }
 
 /* ── CONNECTORS ────────────────────────────────────────── */
@@ -782,6 +806,8 @@ async function runDemo(kind,btn){
   btn.disabled=false;
 }
 
+const STEP_LABELS={starting:'Boshlanmoqda',extract:"Ma'lumot olish",run:'Yuklash',count:'Hisoblash',quality:'Quality',done:'Tayyor',failed:'Xato'};
+
 async function runPipeline(name,btn){
   btn.disabled=true; btn.textContent='…';
   try{
@@ -792,12 +818,22 @@ async function runPipeline(name,btn){
       showRunResult(name,r); pipelines=await api('/api/pipelines'); if(page==='pipelines') renderPipelines();
       btn.disabled=false; btn.textContent='▶ Run'; return;
     }
-    toast(name+' ishga tushdi…'); pollRun(runId,name,btn);
+    toast(name+' ishga tushdi…');
+    pollRun(runId,name,btn);
   }catch(e){
+    // 409 = already running — do NOT fall back to sync (that caused LoadPackageNotFound)
+    if(e.status===409){
+      toast(e.message||'Pipeline allaqachon ishlayapti','err');
+      btn.disabled=false; btn.textContent='▶ Run';
+      return;
+    }
+    // Async endpoint missing → sync once
     try{
       const r=await api('/api/pipelines/'+encodeURIComponent(name)+'/run',{method:'POST'});
       showRunResult(name,r); pipelines=await api('/api/pipelines'); if(page==='pipelines') renderPipelines();
-    }catch(e2){ toast(e2.message,'err'); }
+    }catch(e2){
+      toast(e2.message,'err');
+    }
     btn.disabled=false; btn.textContent='▶ Run';
   }
 }
@@ -805,26 +841,42 @@ async function runPipeline(name,btn){
 function pollRun(runId,name,btn){
   if(pollTimers[runId]) clearInterval(pollTimers[runId]);
   let n=0;
+  // ~15 min @ 1s — katta dataset / REST pagination uchun (backend async)
+  const maxPolls=900;
+  const intervalMs=1000;
   pollTimers[runId]=setInterval(async()=>{
     n++;
     try{
       const job=await api('/api/runs/jobs/'+encodeURIComponent(runId));
-      if(job.status==='running'||job.status==='queued'){
-        if(n>120){ clearInterval(pollTimers[runId]); btn.disabled=false; btn.textContent='▶ Run'; toast('Timeout','err'); }
+      if(job.status==='running'||job.status==='queued'||job.status==='pending'){
+        const step=job.step||job.status;
+        const label=STEP_LABELS[step]||step;
+        const el=job.elapsed_seconds!=null?Math.round(job.elapsed_seconds)+'s':'';
+        btn.textContent=(label+(el?' · '+el:''));
+        if(n>maxPolls){
+          clearInterval(pollTimers[runId]);
+          btn.disabled=false; btn.textContent='▶ Run';
+          toast(name+' hali ishlayapti — keyinroq yangilang (timeout emas, backend davom etishi mumkin)','err');
+        }
         return;
       }
       clearInterval(pollTimers[runId]);
-      showRunResult(name,job.result||job);
+      if(job.status==='error'){
+        toast('Xato: '+name+(job.error?' — '+job.error:''),'err');
+      }else{
+        showRunResult(name,job.result||job);
+      }
       pipelines=await api('/api/pipelines'); runs=await api('/api/runs?limit=50').catch(()=>runs);
       if(page==='pipelines') renderPipelines();
       btn.disabled=false; btn.textContent='▶ Run';
     }catch(e){
-      if(n>5){ clearInterval(pollTimers[runId]); btn.disabled=false; btn.textContent='▶ Run'; toast(e.message,'err'); }
+      if(n>8){ clearInterval(pollTimers[runId]); btn.disabled=false; btn.textContent='▶ Run'; toast(e.message,'err'); }
     }
-  },800);
+  },intervalMs);
 }
 
 function showRunResult(name,r){
+  if(!r){ toast(name+' — natija yo\'q','err'); return; }
   const rows=Object.entries(r.row_counts||{}).map(([t,n])=>t+': '+n).join(', ')||((r.total_rows||0)+' qator');
   if(r.success&&r.quality_passed) toast('✓ '+name+' — '+rows,'ok');
   else if(r.success) toast('Yuklandi, quality ogohlantirish: '+name,'err');
@@ -1008,6 +1060,26 @@ function renderStepTables(body,foot){
       if(manual?.value.trim()) sel=manual.value.split(',').map(s=>s.trim()).filter(Boolean);
       if(!sel.length){ toast('Kamida bitta jadval tanlang','err'); return; }
       draft['f-table_names']=sel.join(', ');
+    }
+    // REST: strip query from endpoint; require auth_key_name for api_key
+    if(selectedConnector==='rest_api'){
+      const epEl=document.getElementById('f-endpoint');
+      if(epEl&&epEl.value){
+        const raw=epEl.value.trim();
+        if(raw.includes('?')){
+          epEl.value=raw.split('?')[0]||'/';
+          draft['f-endpoint']=epEl.value;
+          toast("Endpoint dan query olib tashlandi (pagination backendda max_pages bilan)","ok");
+        }
+      }
+      const authType=(document.getElementById('f-auth_type')||{}).value||draft['f-auth_type']||'none';
+      if(authType==='api_key'){
+        const keyName=((document.getElementById('f-auth_key_name')||{}).value||draft['f-auth_key_name']||'').trim();
+        if(!keyName){
+          toast("API key uchun 'Header/parametr nomi' majburiy (masalan api_key yoki X-API-Key)",'err');
+          return;
+        }
+      }
     }
     step=4; renderDrawer();
   };
