@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import os
 import re
 import time
@@ -161,24 +162,29 @@ class RunResponse(BaseModel):
 
 # Background run jobs (in-memory; single uvicorn process). See review notes.
 _RUN_JOBS: dict[str, dict[str, Any]] = {}
+_RUN_JOBS_LOCK = threading.Lock()
 
 
 def _cleanup_old_run_jobs() -> None:
     """Lazy sweep: drop finished async jobs older than 1 hour."""
     cutoff = time.time() - 3600
-    stale = [
-        jid
-        for jid, j in list(_RUN_JOBS.items())
-        if j.get("finished_at") is not None and j["finished_at"] < cutoff
-    ]
-    for jid in stale:
-        _RUN_JOBS.pop(jid, None)
+    with _RUN_JOBS_LOCK:
+        stale = [
+            jid
+            for jid, j in list(_RUN_JOBS.items())
+            if j.get("finished_at") is not None and j["finished_at"] < cutoff
+        ]
+        for jid in stale:
+            _RUN_JOBS.pop(jid, None)
 
 
 def _execute_run_job(job_id: str, name: str) -> None:
     _cleanup_old_run_jobs()
-    job = _RUN_JOBS[job_id]
-    job["status"] = "running"
+    with _RUN_JOBS_LOCK:
+        job = _RUN_JOBS.get(job_id)
+        if job is None:
+            return
+        job["status"] = "running"
     try:
         register_builtin_connectors()
         result = run_pipeline_by_name(name, store=_store())
@@ -243,23 +249,29 @@ def run_pipeline_async(name: str, background_tasks: BackgroundTasks) -> dict[str
             f"Pipeline '{name}' hozir ishga tushgan. Tugaguncha kuting.",
         )
     job_id = uuid.uuid4().hex
-    _RUN_JOBS[job_id] = {
-        "status": "queued",
-        "pipeline_name": name,
-        "started_at": time.time(),
-        "finished_at": None,
-        "result": None,
-        "error": None,
-    }
+    with _RUN_JOBS_LOCK:
+        _RUN_JOBS[job_id] = {
+            "status": "queued",
+            "pipeline_name": name,
+            "started_at": time.time(),
+            "finished_at": None,
+            "result": None,
+            "error": None,
+        }
     background_tasks.add_task(_execute_run_job, job_id, name)
     return {"run_id": job_id, "status": "queued", "pipeline_name": name}
 
 
 @app.get("/api/runs/jobs/{run_id}", dependencies=[Depends(require_api_key)])
 def run_job_status(run_id: str) -> dict[str, Any]:
-    job = _RUN_JOBS.get(run_id)
+    with _RUN_JOBS_LOCK:
+        job = _RUN_JOBS.get(run_id)
     if job is None:
-        raise HTTPException(404, f"Job '{run_id}' topilmadi")
+        raise HTTPException(
+            404,
+            f"Job '{run_id}' topilmadi. Server qayta ishga tushgan bo'lishi mumkin — "
+            "pipeline ro'yxati yoki Ishga tushirishlar bo'limidan statusni tekshiring.",
+        )
     out = dict(job)
     # Attach live step if pipeline still running (long extracts)
     pname = job.get("pipeline_name")
@@ -575,6 +587,11 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
         _store().save(config, secrets, manifest)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+    if config.schedule.kind.value == "airflow":
+        raise HTTPException(
+            422,
+            "kind=airflow ichki scheduler tomonidan boshqarilmaydi. manual / interval / daily_at ishlating.",
+        )
     if config.schedule.kind.value in ("interval", "daily_at"):
         try:
             reload_jobs()

@@ -114,6 +114,12 @@ def start_scheduler() -> dict[str, Any]:
                     tz,
                 )
 
+            elif kind == ScheduleKind.AIRFLOW.value:
+                log.info(
+                    "skip airflow kind name=%s — ichki scheduler boshqarmaydi",
+                    name,
+                )
+
         scheduler.start()
         _scheduler = scheduler
         _started = True

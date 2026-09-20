@@ -210,16 +210,13 @@ def _default_executor(pipeline_name: str, trigger: str) -> None:
             result.row_counts,
         )
     except PipelineAlreadyRunning:
-        log.warning("queue_skip_already_running name=%s", pipeline_name)
-        runs.record(
-            pipeline_name=pipeline_name,
-            success=False,
-            quality_passed=False,
-            error="Pipeline allaqachon ishlayapti",
-            started_at=started,
-            finished_at=datetime.now(UTC),
-            trigger=trigger,
+        # Concurrent manual /run won the lock — not a failure, just skip
+        log.info(
+            "queue_skip_already_running name=%s trigger=%s — not recording failure",
+            pipeline_name,
+            trigger,
         )
+        return
     except Exception as e:
         log.exception("queue_run_failed name=%s", pipeline_name)
         runs.record(

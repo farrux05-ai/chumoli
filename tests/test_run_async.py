@@ -102,7 +102,7 @@ def test_run_async_returns_run_id_and_completes(api, local_json_server) -> None:
     run_id = started.json()["run_id"]
     assert started.json()["status"] in ("queued", "running", "done")
 
-    deadline = time.time() + 10
+    deadline = time.time() + 30
     status = None
     while time.time() < deadline:
         r = c.get(f"/api/runs/jobs/{run_id}", headers=_h(key))

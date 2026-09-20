@@ -368,8 +368,9 @@ def get_preview_rows(
                 try:
                     # Schema-qualified name required for DuckDB / multi-dataset destinations
                     fqn = f'"{dataset}"."{table_name}"'
+                    # LIMIT is an int we control (not user SQL) — portable across destinations
                     with client.execute_query(
-                        f"SELECT * FROM {fqn} LIMIT %s", limit
+                        f"SELECT * FROM {fqn} LIMIT {int(limit)}"
                     ) as cursor:
                         columns = [d[0] for d in (cursor.description or [])]
                         rows = [list(r) for r in cursor.fetchall()]
@@ -382,10 +383,43 @@ def get_preview_rows(
 
 
 def drop_resource(name: str, resource: str, store: ControlStore | None = None) -> dict[str, str]:
+    """Selectively reset one resource (table + state).
+
+    NOTE: ``pipeline.drop()`` in dlt deletes the *entire* local pipeline
+    working dir — it does NOT take a resource name. Selective drop is done
+    via the supported CLI: ``dlt pipeline <name> drop <resource>``.
+    """
+    import subprocess
+    import sys
+
     _, stored = _load_stored(name, store)
     pipeline = build_dlt_pipeline(stored.config)
+    res = (resource or "").strip()
+    if not res:
+        return {"status": "error", "detail": "Resource nomi bo'sh"}
     try:
-        pipeline.drop(resource)
-        return {"status": "ok", "detail": f"Resource o'chirildi: {resource}"}
+        cmd = [
+            sys.executable,
+            "-m",
+            "dlt",
+            "pipeline",
+            name,
+            "drop",
+            res,
+            "--pipelines-dir",
+            str(pipeline.pipelines_dir),
+        ]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            err = (result.stderr or result.stdout or "").strip()[:400]
+            return {"status": "error", "detail": f"Drop xatosi: {err or 'noma\'lum'}"}
+        return {"status": "ok", "detail": f"Resource o'chirildi: {res}"}
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "detail": "Drop timeout (60s)"}
     except Exception as e:
         return {"status": "error", "detail": f"Drop xatosi: {e}"}

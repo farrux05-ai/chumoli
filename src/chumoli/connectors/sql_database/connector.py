@@ -109,6 +109,7 @@ def _preflight_sqlite(credentials: str) -> None:
 
 
 
+
 def _build_sql_database_source(
     params: dict[str, Any], secrets: dict[str, str]
 ) -> Any:
@@ -128,6 +129,9 @@ def _build_sql_database_source(
 
     if not cursor_column:
         return sql_database(credentials=credentials, table_names=table_names)
+
+    from chumoli.core.sql_cursor_check import assert_cursor_columns_exist
+    assert_cursor_columns_exist(credentials, table_names, cursor_column)
 
     import dlt
 

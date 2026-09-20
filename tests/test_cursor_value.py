@@ -31,3 +31,22 @@ def test_sql_manifest_has_initial_field() -> None:
     text = open("src/chumoli/connectors/sql_database/connector.py", encoding="utf-8").read()
     assert "cursor_initial_value" in text
     assert "parse_cursor_value" in text
+
+
+def test_assert_cursor_columns_missing(tmp_path) -> None:
+    import sqlite3
+    from chumoli.core.sql_cursor_check import assert_cursor_columns_exist
+
+    db = tmp_path / "t.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE orders (id INTEGER, updated_at TEXT)")
+    conn.execute("CREATE TABLE customers (id INTEGER, name TEXT)")
+    conn.commit()
+    conn.close()
+    cred = f"sqlite:///{db}"
+    try:
+        assert_cursor_columns_exist(cred, ["orders", "customers"], "updated_at")
+        raise AssertionError("should have failed")
+    except ValueError as e:
+        assert "customers" in str(e)
+        assert "updated_at" in str(e)
