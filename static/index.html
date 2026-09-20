@@ -362,7 +362,7 @@ function connectorIcon(key){ return CONNECTOR_ICONS[key] || `<svg width="18" hei
 let connectors = [], destinations = [], savedDestinations = [], pipelines = [], runs = [], runStats = {};
 let scheduler = {}, telegramCfg = {configured:false};
 let page = 'pipelines', selectedConnector = null, step = 1, draft = {}, editingName = null;
-let testState = 'idle', inspectedTables = [], inspectedDbLabel = '', pollTimers = {}, recoverPipeline = null;
+let testState = 'idle', inspectedTables = [], inspectedDbLabel = '', inspectedColumns = {}, pollTimers = {}, recoverPipeline = null;
 
 function isSqlConnector(k){ return ['sql_database','postgresql','mysql'].includes(k); }
 
@@ -753,7 +753,7 @@ function renderConnectors(){
     }).join('')}`;
 
   c.querySelectorAll('[data-ck]').forEach(b=>b.onclick=()=>{
-    selectedConnector=b.dataset.ck; draft={}; editingName=null; testState='idle'; inspectedTables=[]; inspectedDbLabel="";
+    selectedConnector=b.dataset.ck; draft={}; editingName=null; testState='idle'; inspectedTables=[]; inspectedDbLabel=""; inspectedColumns={};
     step=2; document.getElementById('drawer-title').textContent='Yangi pipeline';
     renderDrawer(); openDrawer();
   });
@@ -1053,7 +1053,7 @@ async function delPipeline(name){
 /* ── ADD / EDIT ───────────────────────────────────────── */
 async function startAdd(){
   if(!telegramCfg.configured){ try{ telegramCfg=await api('/api/settings/telegram'); }catch{} }
-  step=1; selectedConnector=null; draft={}; editingName=null; testState='idle'; inspectedTables=[]; inspectedDbLabel="";
+  step=1; selectedConnector=null; draft={}; editingName=null; testState='idle'; inspectedTables=[]; inspectedDbLabel=""; inspectedColumns={};
   document.getElementById('drawer-title').textContent='Yangi pipeline';
   renderDrawer(); openDrawer();
 }
@@ -1087,7 +1087,7 @@ async function startEdit(name){
     draft['f-n-fail']=notif.on_failure!==false;
     draft['f-n-ok']=!!notif.on_success;
     testState=isSqlConnector(selectedConnector)&&(cfg.source_params?.table_names||'').trim()?'ok':'idle';
-    inspectedTables=[]; inspectedDbLabel=""; step=2;
+    inspectedTables=[]; inspectedDbLabel=""; inspectedColumns={}; step=2;
     document.getElementById('drawer-title').textContent='Tahrirlash: '+name;
     renderDrawer(); openDrawer();
   }catch(e){ toast(e.message,'err'); }
@@ -1119,11 +1119,8 @@ function captureDraft(){
       draft['f-table_names']=sel.join(', ');
       const cursors={};
       sel.forEach(t=>{
-        const colEl=[...document.querySelectorAll('.sql-cursor-col')].find(el=>el.getAttribute('data-table')===t);
-        const initEl=[...document.querySelectorAll('.sql-cursor-init')].find(el=>el.getAttribute('data-table')===t);
-        const column=(colEl&&colEl.value||'').trim();
-        const initial=(initEl&&initEl.value||'').trim();
-        if(column||initial) cursors[t]={column, initial};
+        const {column, initial, kind}=getCursorInputs(t);
+        if(column||initial) cursors[t]={column, initial, kind};
       });
       draft['f-table_cursors']=Object.keys(cursors).length?JSON.stringify(cursors):'';
     }
@@ -1169,7 +1166,7 @@ function renderStepConnector(body,foot){
       </div>
     </div>`).join('');
   body.querySelectorAll('[data-ck]').forEach(b=>b.onclick=()=>{
-    if(selectedConnector!==b.dataset.ck){ draft={}; testState='idle'; inspectedTables=[]; inspectedDbLabel=""; }
+    if(selectedConnector!==b.dataset.ck){ draft={}; testState='idle'; inspectedTables=[]; inspectedDbLabel=""; inspectedColumns={}; }
     selectedConnector=b.dataset.ck; editingName=null; renderDrawer();
   });
   foot.innerHTML=`<button class="btn btn-primary" id="next1" ${selectedConnector?'':'disabled'}>Keyingi →</button>`;
@@ -1235,11 +1232,46 @@ function renderStepConnection(body,foot){
   document.getElementById('f-connection_string')?.addEventListener('input',()=>{
     const el=document.getElementById('f-connection_string');
     if(testState==='ok'&&el&&el.value&&el.value!==(draft['f-connection_string']||'')){
-      testState='idle'; inspectedTables=[]; inspectedDbLabel="";
+      testState='idle'; inspectedTables=[]; inspectedDbLabel=""; inspectedColumns={};
       const ok=document.querySelector('.field-ok');
       if(ok) ok.remove();
     }
   });
+}
+
+
+function getCursorInputs(table){
+  const colEl=[...document.querySelectorAll('.sql-cursor-col')].find(el=>el.getAttribute('data-table')===table);
+  const dateEl=[...document.querySelectorAll('.sql-cursor-init')].find(el=>el.getAttribute('data-table')===table);
+  const numEl=[...document.querySelectorAll('.sql-cursor-init-num')].find(el=>el.getAttribute('data-table')===table);
+  const column=(colEl&&colEl.value||'').trim();
+  let kind='date';
+  if(colEl){
+    const opt=colEl.selectedOptions&&colEl.selectedOptions[0];
+    if(opt&&opt.dataset.kind) kind=opt.dataset.kind;
+    else {
+      const meta=(inspectedColumns[table]||[]).find(c=>c.name===column);
+      if(meta) kind=meta.kind;
+    }
+  }
+  let initial='';
+  if(kind==='number'){
+    initial=(numEl&&numEl.value||'').trim();
+  } else {
+    initial=(dateEl&&dateEl.value||'').trim();
+  }
+  return {column, initial, kind};
+}
+
+function syncCursorInputVisibility(table){
+  const colEl=[...document.querySelectorAll('.sql-cursor-col')].find(el=>el.getAttribute('data-table')===table);
+  const dateEl=[...document.querySelectorAll('.sql-cursor-init')].find(el=>el.getAttribute('data-table')===table);
+  const numEl=[...document.querySelectorAll('.sql-cursor-init-num')].find(el=>el.getAttribute('data-table')===table);
+  if(!colEl) return;
+  const opt=colEl.selectedOptions&&colEl.selectedOptions[0];
+  const kind=(opt&&opt.dataset.kind)||'date';
+  if(dateEl) dateEl.style.display=(kind==='number')?'none':'';
+  if(numEl) numEl.style.display=(kind==='number')?'':'none';
 }
 
 function parseTableCursorsDraft(){
@@ -1291,9 +1323,21 @@ function renderStepTables(body,foot){
                   <input type="checkbox" class="sql-tbl" value="${esc(t)}" ${on?'checked':''}/>
                   <span class="sql-name" title="${esc(t)}">${esc(t)}</span>
                 </label>
-                <div class="sql-cursor-row" style="display:${on?'flex':'none'};gap:6px;padding:4px 8px 8px 28px;flex-wrap:wrap">
-                  <input type="text" class="sql-cursor-col" data-table="${esc(t)}" placeholder="cursor ustun (masalan updated_at)" value="${esc(col)}" style="flex:1;min-width:120px;height:30px;border:1px solid var(--border);border-radius:6px;padding:0 8px;font-size:12px;background:var(--surface)"/>
-                  <input type="text" class="sql-cursor-init" data-table="${esc(t)}" placeholder="qachondan (ixtiyoriy)" value="${esc(init)}" style="flex:1;min-width:100px;height:30px;border:1px solid var(--border);border-radius:6px;padding:0 8px;font-size:12px;background:var(--surface)"/>
+                <div class="sql-cursor-row" style="display:${on?'flex':'none'};gap:6px;padding:4px 8px 8px 28px;flex-wrap:wrap;align-items:center">
+                  <select class="sql-cursor-col" data-table="${esc(t)}" style="flex:1;min-width:140px;height:30px;border:1px solid var(--border);border-radius:6px;padding:0 6px;font-size:12px;background:var(--surface)">
+                    <option value="">— cursor yo'q (to'liq) —</option>
+                    ${(inspectedColumns[t]||[]).filter(c=>c.kind==='date'||c.kind==='number').map(c=>{
+                      const sel=(col===c.name)?'selected':'';
+                      const tag=c.kind==='date'?'sana':'raqam';
+                      return `<option value="${esc(c.name)}" data-kind="${c.kind}" ${sel}>${esc(c.name)} (${tag})</option>`;
+                    }).join('')}
+                    ${(inspectedColumns[t]||[]).filter(c=>c.kind==='other').length?`<optgroup label="Boshqa">${(inspectedColumns[t]||[]).filter(c=>c.kind==='other').map(c=>{
+                      const sel=(col===c.name)?'selected':'';
+                      return `<option value="${esc(c.name)}" data-kind="other" ${sel}>${esc(c.name)}</option>`;
+                    }).join('')}</optgroup>`:''}
+                  </select>
+                  <input type="date" class="sql-cursor-init" data-table="${esc(t)}" data-kind="date" value="${esc((init||'').toString().slice(0,10))}" title="Sana ustun uchun" style="flex:1;min-width:130px;height:30px;border:1px solid var(--border);border-radius:6px;padding:0 6px;font-size:12px;background:var(--surface);${(cfg.kind==='number'||(col&&(inspectedColumns[t]||[]).find(c=>c.name===col)?.kind==='number'))?'display:none':''}"/>
+                  <input type="number" class="sql-cursor-init-num" data-table="${esc(t)}" data-kind="number" placeholder="boshlang'ich (masalan 0)" value="${esc((cfg.kind==='number'||(inspectedColumns[t]||[]).find(c=>c.name===col)?.kind==='number')?init:'')}" style="flex:1;min-width:100px;height:30px;border:1px solid var(--border);border-radius:6px;padding:0 6px;font-size:12px;background:var(--surface);${(cfg.kind==='number'||(col&&(inspectedColumns[t]||[]).find(c=>c.name===col)?.kind==='number'))?'':'display:none'}"/>
                 </div>
               </div>`;
             }).join('')}
@@ -1325,11 +1369,8 @@ function renderStepTables(body,foot){
       // Collect per-table cursors
       const cursors={};
       sel.forEach(t=>{
-        const colEl=[...document.querySelectorAll('.sql-cursor-col')].find(el=>el.getAttribute('data-table')===t);
-        const initEl=[...document.querySelectorAll('.sql-cursor-init')].find(el=>el.getAttribute('data-table')===t);
-        const column=(colEl&&colEl.value||'').trim();
-        const initial=(initEl&&initEl.value||'').trim();
-        if(column||initial) cursors[t]={column, initial};
+        const {column, initial, kind}=getCursorInputs(t);
+        if(column||initial) cursors[t]={column, initial, kind};
       });
       draft['f-table_cursors']=Object.keys(cursors).length?JSON.stringify(cursors):'';
       // Clear global cursor fields — per-table is source of truth in UI
@@ -1376,18 +1417,21 @@ function renderStepTables(body,foot){
     // Update cursors draft live
     const cursors={};
     sel.forEach(t=>{
-      const colEl=[...document.querySelectorAll('.sql-cursor-col')].find(el=>el.getAttribute('data-table')===t);
-      const initEl=[...document.querySelectorAll('.sql-cursor-init')].find(el=>el.getAttribute('data-table')===t);
-      const column=(colEl&&colEl.value||'').trim();
-      const initial=(initEl&&initEl.value||'').trim();
-      if(column||initial) cursors[t]={column, initial};
+      const {column, initial, kind}=getCursorInputs(t);
+      if(column||initial) cursors[t]={column, initial, kind};
     });
     draft['f-table_cursors']=Object.keys(cursors).length?JSON.stringify(cursors):'';
   }
   document.getElementById('sql-tables')?.querySelectorAll('.sql-tbl').forEach(cb=>{
     cb.addEventListener('change', syncSqlPicker);
   });
-  document.querySelectorAll('.sql-cursor-col, .sql-cursor-init').forEach(el=>{
+  document.querySelectorAll('.sql-cursor-col').forEach(el=>{
+    el.addEventListener('change', ()=>{
+      syncCursorInputVisibility(el.getAttribute('data-table'));
+      syncSqlPicker();
+    });
+  });
+  document.querySelectorAll('.sql-cursor-init, .sql-cursor-init-num').forEach(el=>{
     el.addEventListener('input', syncSqlPicker);
   });
   document.getElementById('sql-all')?.addEventListener('click',()=>{
@@ -1597,6 +1641,7 @@ async function runSqlInspect(){
     const res=await api('/api/connectors/sql_database/inspect',{method:'POST',body:JSON.stringify({connection_string:conn})});
     inspectedTables=res.tables||[];
     inspectedDbLabel=res.database||'';
+    inspectedColumns=res.columns||{};
     testState='ok';
     // Keep connection in draft so Back/Next never loses it
     draft['f-connection_string']=conn;
@@ -1606,7 +1651,7 @@ async function runSqlInspect(){
       : ("Ulanish OK — jadval yo'q"+dbLabel));
     renderDrawer();
   }catch(e){
-    testState='fail'; inspectedTables=[]; inspectedDbLabel=""; toast(e.message,'err');
+    testState='fail'; inspectedTables=[]; inspectedDbLabel=""; inspectedColumns={}; toast(e.message,'err');
     if(btn){ btn.disabled=false; btn.textContent='Ulanishni tekshirish'; }
     renderDrawer();
   }

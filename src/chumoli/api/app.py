@@ -424,17 +424,20 @@ class SqlInspectBody(BaseModel):
 
 @app.post("/api/connectors/sql_database/inspect", dependencies=[Depends(require_api_key)])
 def inspect_sql_database(body: SqlInspectBody) -> dict[str, Any]:
-    """Live DB schema scan — table names + database label."""
+    """Live DB schema scan — tables, cursor-friendly columns, database label."""
     from sqlalchemy.engine.url import make_url
 
-    from chumoli.connectors.sql_database.connector import inspect_sql_tables
+    from chumoli.connectors.sql_database.connector import inspect_sql_schema
 
     try:
-        tables = inspect_sql_tables(body.connection_string)
+        schema = inspect_sql_schema(body.connection_string)
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
     except Exception as e:
         raise HTTPException(500, f"Inspect xatosi: {e}") from e
+
+    tables = schema.get("tables") or []
+    columns = schema.get("columns") or {}
 
     db_label = ""
     try:
@@ -445,7 +448,12 @@ def inspect_sql_database(body: SqlInspectBody) -> dict[str, Any]:
     except Exception:
         pass
 
-    return {"tables": tables, "count": len(tables), "database": db_label}
+    return {
+        "tables": tables,
+        "count": len(tables),
+        "database": db_label,
+        "columns": columns,
+    }
 
 
 @app.get("/api/connectors", dependencies=[Depends(require_api_key)])

@@ -437,3 +437,76 @@ def inspect_sql_tables(connection_string: str) -> list[str]:
     except Exception as e:
         raise ValueError(f"Ulanish yoki schema o'qish xatosi: {e}") from e
     return tables
+
+
+def _column_kind(col_type: Any) -> str:
+    """Map SQLAlchemy type to cursor UI kind: date | number | other."""
+    name = ""
+    try:
+        name = type(col_type).__name__.lower()
+    except Exception:
+        pass
+    try:
+        s = str(col_type).lower()
+    except Exception:
+        s = name
+    blob = f"{name} {s}"
+    if any(x in blob for x in ("date", "time", "timestamp", "datetime")):
+        return "date"
+    if any(x in blob for x in ("int", "numeric", "decimal", "float", "double", "real", "number", "serial", "bigint", "smallint")):
+        return "number"
+    return "other"
+
+
+def inspect_sql_schema(connection_string: str) -> dict[str, Any]:
+    """Tables + per-table columns (name, kind) for cursor UI.
+
+    Returns::
+        {
+          "tables": ["orders", "public.events"],
+          "columns": {
+            "orders": [{"name": "id", "kind": "number"}, {"name": "created_at", "kind": "date"}],
+            ...
+          }
+        }
+    """
+    from sqlalchemy import create_engine, inspect
+    from sqlalchemy.exc import SQLAlchemyError
+
+    cred = (connection_string or "").strip()
+    if not cred:
+        raise ValueError("Connection string bo'sh")
+
+    _preflight_sqlite(cred)
+    tables = inspect_sql_tables(cred)
+    columns: dict[str, list[dict[str, str]]] = {}
+
+    try:
+        engine = create_engine(cred)
+        with engine.connect() as conn:
+            insp = inspect(conn)
+            for tref in tables:
+                schema, table = _parse_table_ref(tref)
+                try:
+                    if schema:
+                        cols_raw = insp.get_columns(table, schema=schema)
+                    else:
+                        cols_raw = insp.get_columns(table)
+                except Exception:
+                    columns[tref] = []
+                    continue
+                out: list[dict[str, str]] = []
+                for c in cols_raw:
+                    cname = c.get("name")
+                    if not cname:
+                        continue
+                    kind = _column_kind(c.get("type"))
+                    out.append({"name": str(cname), "kind": kind})
+                columns[tref] = out
+        engine.dispose()
+    except SQLAlchemyError as e:
+        raise ValueError(f"Ustunlarni o'qish xatosi: {e}") from e
+    except Exception as e:
+        raise ValueError(f"Ustunlarni o'qish xatosi: {e}") from e
+
+    return {"tables": tables, "columns": columns}
