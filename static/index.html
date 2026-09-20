@@ -1097,12 +1097,37 @@ function captureDraft(){
   document.querySelectorAll('#drawer-body [id^="f-"]').forEach(el=>{
     if(el.type==='checkbox') draft[el.id]=el.checked;
     else if(el.type==='password'){ if(el.value) draft[el.id]=el.value; }
+    else if(el.type==='hidden'){
+      // Never let a stale hidden input wipe draft (table_names managed by picker)
+      if(el.id==='f-table_names'||el.id==='f-table_cursors'){
+        if(el.value) draft[el.id]=el.value;
+      } else {
+        draft[el.id]=el.value;
+      }
+    }
     else if(el.readOnly || el.disabled){
-      // Edit mode: empty readonly must not wipe draft (e.g. pipeline name)
       if(el.value) draft[el.id]=el.value;
     }
     else draft[el.id]=el.value;
   });
+  // SQL table picker: live checkbox + per-table cursor state is source of truth
+  const box=document.getElementById('sql-tables');
+  if(box){
+    const cbs=[...box.querySelectorAll('.sql-tbl')];
+    if(cbs.length){
+      const sel=cbs.filter(c=>c.checked).map(c=>c.value);
+      draft['f-table_names']=sel.join(', ');
+      const cursors={};
+      sel.forEach(t=>{
+        const colEl=[...document.querySelectorAll('.sql-cursor-col')].find(el=>el.getAttribute('data-table')===t);
+        const initEl=[...document.querySelectorAll('.sql-cursor-init')].find(el=>el.getAttribute('data-table')===t);
+        const column=(colEl&&colEl.value||'').trim();
+        const initial=(initEl&&initEl.value||'').trim();
+        if(column||initial) cursors[t]={column, initial};
+      });
+      draft['f-table_cursors']=Object.keys(cursors).length?JSON.stringify(cursors):'';
+    }
+  }
 }
 
 function dv(id,fallback){
@@ -1159,7 +1184,7 @@ function renderStepConnection(body,foot){
   const connFields=(m?.fields||[]).filter(f=>
     f.secret||f.key==='connection_string'||f.key==='base_url'||AUTH_FIELDS.has(f.key)
   );
-  const fieldsToShow=connFields.length?connFields:(m?.fields||[]).filter(f=>!['table_names','cursor_column','cursor_initial_value','resources'].includes(f.key));
+  const fieldsToShow=connFields.length?connFields:(m?.fields||[]).filter(f=>!['table_names','cursor_column','cursor_initial_value','table_cursors','resources'].includes(f.key));
   let statusHtml='';
   if(isSql){
     if(testState==='ok') statusHtml=`<div class="field-ok">✓ Ulanish tasdiqlandi${inspectedTables.length?' — '+inspectedTables.length+' jadval':''}</div>`;
@@ -1173,20 +1198,46 @@ function renderStepConnection(body,foot){
     </div>
     ${fieldsToShow.map(f=>fieldHtml(f)).join('')}
     ${isSql?`<button type="button" class="btn btn-outline" id="btn-inspect" style="width:100%;margin-top:4px">Ulanishni tekshirish</button>${statusHtml}`:''}`;
+  // Keep Next enabled if already verified — going back from step 3 must not lock the user
   const canNext=isSql?(testState==='ok'):true;
   foot.innerHTML=`<button class="btn btn-ghost" id="back2">← Orqaga</button><button class="btn btn-primary" id="next2" ${canNext?'':'disabled'}>Keyingi →</button>`;
-  document.getElementById('back2').onclick=()=>{ step=1; renderDrawer(); };
+  document.getElementById('back2').onclick=()=>{ captureDraft(); step=1; renderDrawer(); };
   document.getElementById('next2').onclick=()=>{
-    const name=((document.getElementById('f-name')||{}).value||draft['f-name']||editingName||'').toString().trim();
+    const nameEl=document.getElementById('f-name');
+    const name=((nameEl&&nameEl.value)||draft['f-name']||editingName||'').toString().trim();
     if(!name){ toast('Pipeline nomi majburiy','err'); return; }
     draft['f-name']=name;
+    // Preserve connection string from live input if typed
+    const connEl=document.getElementById('f-connection_string');
+    if(connEl&&connEl.value) draft['f-connection_string']=connEl.value;
     if(isSql&&testState!=='ok'){ toast("Avval ulanishni tekshiring",'err'); return; }
+    if(isSql&&!inspectedTables.length&&testState==='ok'){
+      // Still allow next — user can type tables manually on step 3
+    }
     step=3; renderDrawer();
   };
   document.getElementById('btn-inspect')?.addEventListener('click',runSqlInspect);
   document.getElementById('f-connection_string')?.addEventListener('input',()=>{
-    if(testState==='ok'){ testState='idle'; inspectedTables=[]; inspectedDbLabel=""; document.getElementById('next2').disabled=true; }
+    // Only invalidate if the user actually changed the value away from what was verified
+    const el=document.getElementById('f-connection_string');
+    if(testState==='ok'&&el&&el.value){
+      testState='idle'; inspectedTables=[]; inspectedDbLabel="";
+      const n2=document.getElementById('next2');
+      if(n2) n2.disabled=true;
+      // Clear ok status text
+      const ok=document.querySelector('.field-ok');
+      if(ok) ok.remove();
+    }
   });
+}
+
+function parseTableCursorsDraft(){
+  try{
+    const raw=dv('f-table_cursors','');
+    if(!raw) return {};
+    if(typeof raw==='object') return raw;
+    return JSON.parse(raw)||{};
+  }catch{ return {}; }
 }
 
 function renderStepTables(body,foot){
@@ -1195,7 +1246,8 @@ function renderStepTables(body,foot){
   const step2Keys=new Set((m?.fields||[])
     .filter(f=>f.secret||f.key==='connection_string'||f.key==='base_url'||AUTH_FIELDS.has(f.key))
     .map(f=>f.key));
-  const resourceKeys=new Set(['table_names','cursor_column','cursor_initial_value','resources','endpoint','from_days_ago']);
+  // table_cursors / table_names handled specially for SQL; skip generic field render for them
+  const resourceKeys=new Set(['table_names','cursor_column','cursor_initial_value','table_cursors','resources','endpoint','from_days_ago']);
   const fields=(m?.fields||[]).filter(f=>!step2Keys.has(f.key)&&(resourceKeys.has(f.key)||(!f.secret&&f.key!=='connection_string'&&f.key!=='base_url')));
 
   let tablesBlock='';
@@ -1203,11 +1255,11 @@ function renderStepTables(body,foot){
     const current=new Set(String(dv('f-table_names','')).split(',').map(s=>s.trim()).filter(Boolean));
     const tables=inspectedTables.length?inspectedTables:[...current];
     const selectedN=[...current].filter(t=>tables.includes(t)).length;
+    const cursors=parseTableCursorsDraft();
     tablesBlock=`
-      ${inspectedDbLabel?`<div class="field-hint" style="margin-bottom:8px">Manba: <strong>${esc(inspectedDbLabel)}</strong></div>`:''}
+      ${inspectedDbLabel?`<div class="field-hint" style="margin-bottom:8px">Manba: <strong>${esc(inspectedDbLabel)}</strong> · ${tables.length} jadval</div>`:''}
       <div class="field">
         <label>Jadvallar *</label>
-        <input id="f-table_names" type="hidden" value="${esc(dv('f-table_names',''))}"/>
         ${tables.length?`
         <div class="sql-picker" id="sql-tables">
           <div class="sql-picker-bar">
@@ -1220,10 +1272,19 @@ function renderStepTables(body,foot){
           <div class="sql-picker-list">
             ${tables.map(t=>{
               const on=current.has(t);
-              return `<label class="sql-row${on?' is-on':''}">
-                <input type="checkbox" class="sql-tbl" value="${esc(t)}" ${on?'checked':''}/>
-                <span class="sql-name" title="${esc(t)}">${esc(t)}</span>
-              </label>`;
+              const cfg=cursors[t]||{};
+              const col=cfg.column||cfg.cursor_column||'';
+              const init=cfg.initial||cfg.cursor_initial_value||'';
+              return `<div class="sql-row-wrap${on?' is-on':''}" data-table="${esc(t)}">
+                <label class="sql-row">
+                  <input type="checkbox" class="sql-tbl" value="${esc(t)}" ${on?'checked':''}/>
+                  <span class="sql-name" title="${esc(t)}">${esc(t)}</span>
+                </label>
+                <div class="sql-cursor-row" style="display:${on?'flex':'none'};gap:6px;padding:4px 8px 8px 28px;flex-wrap:wrap">
+                  <input type="text" class="sql-cursor-col" data-table="${esc(t)}" placeholder="cursor ustun (masalan updated_at)" value="${esc(col)}" style="flex:1;min-width:120px;height:30px;border:1px solid var(--border);border-radius:6px;padding:0 8px;font-size:12px;background:var(--surface)"/>
+                  <input type="text" class="sql-cursor-init" data-table="${esc(t)}" placeholder="qachondan (ixtiyoriy)" value="${esc(init)}" style="flex:1;min-width:100px;height:30px;border:1px solid var(--border);border-radius:6px;padding:0 8px;font-size:12px;background:var(--surface)"/>
+                </div>
+              </div>`;
             }).join('')}
           </div>
         </div>`:
@@ -1233,16 +1294,15 @@ function renderStepTables(body,foot){
           </div>
           <input id="f-table_names_manual" type="text" placeholder="orders, customers" value="${esc(dv('f-table_names',''))}"/>
         </div>`}
-        <div class="field-hint">${tables.length?'Qatorni bosib tanlang':'Vergul bilan ajrating'}</div>
-      </div>
-      ${fields.filter(f=>f.key==='cursor_column'||f.key==='cursor_initial_value').map(f=>fieldHtml(f)).join('')}`;
+        <div class="field-hint">${tables.length?'Har bir jadval uchun alohida cursor ustun va boshlang\'ich sana (ixtiyoriy). Bo\'sh = to\'liq yuklash.':'Vergul bilan ajrating'}</div>
+      </div>`;
   }else{
-    tablesBlock=fields.map(f=>fieldHtml(f)).join('')||`<div style="color:var(--faint);font-size:13px;padding:8px 0">Bu ulagich uchun qo'shimcha sozlama kerak emas</div>`;
+    tablesBlock=fields.filter(f=>!['table_names','table_cursors','cursor_column','cursor_initial_value'].includes(f.key)).map(f=>fieldHtml(f)).join('')||`<div style="color:var(--faint);font-size:13px;padding:8px 0">Bu ulagich uchun qo'shimcha sozlama kerak emas</div>`;
   }
 
   body.innerHTML=stepBarHtml(3,4)+tablesBlock;
   foot.innerHTML=`<button class="btn btn-ghost" id="back3">← Orqaga</button><button class="btn btn-primary" id="next3">Keyingi →</button>`;
-  document.getElementById('back3').onclick=()=>{ step=2; renderDrawer(); };
+  document.getElementById('back3').onclick=()=>{ captureDraft(); step=2; renderDrawer(); };
   document.getElementById('next3').onclick=()=>{
     if(isSql){
       const box=document.getElementById('sql-tables');
@@ -1251,6 +1311,19 @@ function renderStepTables(body,foot){
       if(manual?.value.trim()) sel=manual.value.split(',').map(s=>s.trim()).filter(Boolean);
       if(!sel.length){ toast('Kamida bitta jadval tanlang','err'); return; }
       draft['f-table_names']=sel.join(', ');
+      // Collect per-table cursors
+      const cursors={};
+      sel.forEach(t=>{
+        const colEl=[...document.querySelectorAll('.sql-cursor-col')].find(el=>el.getAttribute('data-table')===t);
+        const initEl=[...document.querySelectorAll('.sql-cursor-init')].find(el=>el.getAttribute('data-table')===t);
+        const column=(colEl&&colEl.value||'').trim();
+        const initial=(initEl&&initEl.value||'').trim();
+        if(column||initial) cursors[t]={column, initial};
+      });
+      draft['f-table_cursors']=Object.keys(cursors).length?JSON.stringify(cursors):'';
+      // Clear global cursor fields — per-table is source of truth in UI
+      draft['f-cursor_column']='';
+      draft['f-cursor_initial_value']='';
     }
     // REST: strip query from endpoint; require auth_key_name for api_key
     if(selectedConnector==='rest_api'){
@@ -1284,12 +1357,27 @@ function renderStepTables(body,foot){
     const countEl=document.getElementById('sql-count');
     if(countEl) countEl.textContent=sel.length+' / '+cbs.length+' tanlangan';
     cbs.forEach(cb=>{
-      const row=cb.closest('.sql-row');
-      if(row) row.classList.toggle('is-on', cb.checked);
+      const wrap=cb.closest('.sql-row-wrap')||cb.closest('.sql-row');
+      if(wrap) wrap.classList.toggle('is-on', cb.checked);
+      const cursorRow=wrap&&wrap.querySelector('.sql-cursor-row');
+      if(cursorRow) cursorRow.style.display=cb.checked?'flex':'none';
     });
+    // Update cursors draft live
+    const cursors={};
+    sel.forEach(t=>{
+      const colEl=[...document.querySelectorAll('.sql-cursor-col')].find(el=>el.getAttribute('data-table')===t);
+      const initEl=[...document.querySelectorAll('.sql-cursor-init')].find(el=>el.getAttribute('data-table')===t);
+      const column=(colEl&&colEl.value||'').trim();
+      const initial=(initEl&&initEl.value||'').trim();
+      if(column||initial) cursors[t]={column, initial};
+    });
+    draft['f-table_cursors']=Object.keys(cursors).length?JSON.stringify(cursors):'';
   }
   document.getElementById('sql-tables')?.querySelectorAll('.sql-tbl').forEach(cb=>{
     cb.addEventListener('change', syncSqlPicker);
+  });
+  document.querySelectorAll('.sql-cursor-col, .sql-cursor-init').forEach(el=>{
+    el.addEventListener('input', syncSqlPicker);
   });
   document.getElementById('sql-all')?.addEventListener('click',()=>{
     document.querySelectorAll('#sql-tables .sql-tbl').forEach(c=>{ c.checked=true; });
@@ -1520,7 +1608,18 @@ async function savePipeline(){
     if(draft['f-'+f.key]!==undefined&&draft['f-'+f.key]!==null&&draft['f-'+f.key]!==''){
       if(!el||el.type==='password'||!el.value) v=draft['f-'+f.key];
     }
+    if((f.key==='table_names'||f.key==='table_cursors')&&draft['f-'+f.key]){
+      v=draft['f-'+f.key];
+    }
     if(f.secret) secrets[f.key]=v; else source_params[f.key]=v;
+  }
+  // SQL: table_names / table_cursors live only in draft after step 3 (not rendered on step 4)
+  if(isSqlConnector(selectedConnector)){
+    if(draft['f-table_names']) source_params.table_names=draft['f-table_names'];
+    if(draft['f-table_cursors']) source_params.table_cursors=draft['f-table_cursors'];
+    if(!source_params.table_names||!String(source_params.table_names).trim()){
+      toast('Kamida bitta jadval tanlang','err'); return;
+    }
   }
   const destMode=(document.getElementById('f-dest-mode')||{}).value||'new';
   let dest={connector:'duckdb',dataset_name:'raw'};

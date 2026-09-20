@@ -5,11 +5,22 @@ from __future__ import annotations
 from typing import Any
 
 
+def _split_table_ref(name: str) -> tuple[str | None, str]:
+    name = (name or "").strip()
+    if "." in name:
+        schema, table = name.split(".", 1)
+        schema, table = schema.strip(), table.strip()
+        if schema and table:
+            return schema, table
+    return None, name
+
+
 def assert_cursor_columns_exist(
     credentials: str, table_names: list[str], cursor_column: str
 ) -> None:
     """Fail fast if cursor_column missing on any selected table.
 
+    table_names may be bare (`orders`) or schema-qualified (`sales.orders`).
     Uses SQLAlchemy when available; for sqlite:// falls back to stdlib.
     """
     cred = (credentials or "").strip()
@@ -28,13 +39,17 @@ def assert_cursor_columns_exist(
     try:
         insp = inspect(engine)
         missing: list[str] = []
-        for table in table_names:
+        for table_ref in table_names:
+            schema, table = _split_table_ref(table_ref)
             try:
-                cols = {c["name"] for c in insp.get_columns(table)}
+                if schema:
+                    cols = {c["name"] for c in insp.get_columns(table, schema=schema)}
+                else:
+                    cols = {c["name"] for c in insp.get_columns(table)}
             except Exception:
                 continue
             if cursor_column not in cols:
-                missing.append(table)
+                missing.append(table_ref)
         if missing:
             raise ValueError(
                 f"cursor_column '{cursor_column}' quyidagi jadvallarda topilmadi: "
@@ -58,12 +73,11 @@ def _assert_sqlite(
     path = credentials.replace("sqlite:///", "", 1)
     if path.startswith("/") and credentials.startswith("sqlite:////"):
         path = "/" + path.lstrip("/")
-    # normalize sqlite:////tmp/x.db → /tmp/x.db
     while credentials.startswith("sqlite:////"):
-        path = credentials[len("sqlite:///"):]  # keeps one /
+        path = credentials[len("sqlite:///") :]  # keeps one /
         break
     else:
-        path = credentials[len("sqlite:///"):]
+        path = credentials[len("sqlite:///") :]
 
     db_path = Path(path)
     if not db_path.is_file():
@@ -72,13 +86,14 @@ def _assert_sqlite(
     conn = sqlite3.connect(str(db_path))
     try:
         missing: list[str] = []
-        for table in table_names:
+        for table_ref in table_names:
+            _schema, table = _split_table_ref(table_ref)
             cur = conn.execute(f'PRAGMA table_info("{table}")')
             cols = {row[1] for row in cur.fetchall()}
             if not cols:
                 continue
             if cursor_column not in cols:
-                missing.append(table)
+                missing.append(table_ref)
         if missing:
             raise ValueError(
                 f"cursor_column '{cursor_column}' quyidagi jadvallarda topilmadi: "
