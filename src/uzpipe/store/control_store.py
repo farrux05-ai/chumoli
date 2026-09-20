@@ -53,9 +53,9 @@ class ControlStore:
 
     @staticmethod
     def _default_db_path() -> Path:
-        home = Path(__import__("os").environ.get("UZPIPE_HOME") or (Path.home() / ".uzpipe"))
-        home.mkdir(mode=0o700, parents=True, exist_ok=True)
-        return home / "uzpipe_control.db"
+        from uzpipe.core.paths import ensure_runtime_dirs, uzpipe_home
+        ensure_runtime_dirs()
+        return uzpipe_home() / "uzpipe_control.db"
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, check_same_thread=False)

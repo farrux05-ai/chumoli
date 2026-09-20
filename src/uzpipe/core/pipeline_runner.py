@@ -52,29 +52,32 @@ class RunResult:
 
 
 def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
-    import os
-    from pathlib import Path
+    from uzpipe.core.paths import ensure_runtime_dirs, pipelines_dir, resolve_duckdb_path
+
+    ensure_runtime_dirs()
+    dest_key = config.destination.connector
+    connection = config.destination.connection
+
+    # DuckDB without an explicit path used to write <cwd>/<name>.duckdb — force under UZPIPE_HOME/data
+    if dest_key == "duckdb":
+        connection = resolve_duckdb_path(connection or "", config.name)
 
     destination_kwargs: dict[str, Any] = {}
-    if config.destination.connection:
-        destination_kwargs["credentials"] = config.destination.connection
+    if connection:
+        destination_kwargs["credentials"] = connection
 
     if destination_kwargs:
-        destination_factory = getattr(dlt.destinations, config.destination.connector)
+        destination_factory = getattr(dlt.destinations, dest_key)
         destination: Any = destination_factory(**destination_kwargs)
     else:
-        destination = config.destination.connector
+        destination = dest_key
 
-    # Isolate dlt working dir (tests + multi-pipeline stability)
-    home = Path(os.environ.get("UZPIPE_HOME", Path.home() / ".uzpipe"))
-    pipelines_dir = home / "pipelines"
-    pipelines_dir.mkdir(parents=True, exist_ok=True)
-
+    pdir = pipelines_dir()
     return dlt.pipeline(
         pipeline_name=config.name,
         destination=destination,
         dataset_name=config.destination.dataset_name,
-        pipelines_dir=str(pipelines_dir),
+        pipelines_dir=str(pdir),
     )
 
 

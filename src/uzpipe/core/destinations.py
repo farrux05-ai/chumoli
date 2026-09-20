@@ -48,8 +48,8 @@ DESTINATION_CATALOG: list[DestinationSpec] = [
         label="DuckDB",
         description="Local analytical DB — MVP default",
         needs_connection=False,
-        connection_placeholder="~/uzpipe_data/warehouse.duckdb",
-        connection_help="Ixtiyoriy. Bo'sh qoldirilsa dlt default local file ishlatadi.",
+        connection_placeholder="(bo'sh = $UZPIPE_HOME/data/<pipeline>.duckdb)",
+        connection_help="Ixtiyoriy. Bo'sh qoldirilsa fayl $UZPIPE_HOME/data/<pipeline_nomi>.duckdb ga yoziladi (loyiha papkasiga emas).",
         connection_label="Fayl yo'li (ixtiyoriy)",
     ),
     DestinationSpec(

@@ -662,7 +662,9 @@ def demo_volume(row_count: int = 100000) -> dict[str, Any]:
     row_count = max(1000, min(int(row_count), 1_000_000))
     name = "demo_volume"
     manifest = registry.get_manifest("synthetic_volume")
-    duck_path = str(Path("/tmp") / "uzpipe_volume_demo.duckdb")
+    from uzpipe.core.paths import examples_dir, ensure_runtime_dirs
+    ensure_runtime_dirs()
+    duck_path = str(examples_dir() / "demo_volume.duckdb")
     config = PipelineConfig(
         name=name,
         connector_key="synthetic_volume",
@@ -686,7 +688,9 @@ def demo_sql() -> dict[str, Any]:
     sample_sqlite_path()  # ensure file exists
     name = "demo_sql_orders"
     manifest = registry.get_manifest("sql_database")
-    duck_path = str(Path.home() / ".uzpipe" / "examples" / "demo_sql.duckdb")
+    from uzpipe.core.paths import examples_dir, ensure_runtime_dirs
+    ensure_runtime_dirs()
+    duck_path = str(examples_dir() / "demo_sql.duckdb")
     config = PipelineConfig(
         name=name,
         connector_key="sql_database",
@@ -715,7 +719,9 @@ def demo_rest() -> dict[str, Any]:
     register_builtin_connectors()
     name = "demo_rest_posts"
     manifest = registry.get_manifest("rest_api")
-    duck_path = str(Path.home() / ".uzpipe" / "examples" / "demo_rest.duckdb")
+    from uzpipe.core.paths import examples_dir, ensure_runtime_dirs
+    ensure_runtime_dirs()
+    duck_path = str(examples_dir() / "demo_rest.duckdb")
     config = PipelineConfig(
         name=name,
         connector_key="rest_api",

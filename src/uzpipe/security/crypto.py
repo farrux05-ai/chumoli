@@ -69,7 +69,8 @@ class CredentialCipher:
 
     @staticmethod
     def _default_key_path() -> Path:
-        home = Path.home() / ".uzpipe"
+        import os
+        home = Path(os.environ.get("UZPIPE_HOME") or (Path.home() / ".uzpipe"))
         home.mkdir(mode=0o700, parents=True, exist_ok=True)
         return home / "master.key"
 
