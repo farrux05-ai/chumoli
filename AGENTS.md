@@ -1,12 +1,12 @@
-# UzPipe — Agent Instructions
+# Chumoli — Agent Instructions
 
 Read this first. Then open **one** skill. Do not invent scope.
 
 ## Product
 
-**UzPipe** — lightweight EL for Uzbekistan on **dlt** (Apache 2.0).
+**Chumoli** — lightweight EL for Uzbekistan on **dlt** (Apache 2.0).
 Moat: UZ connectors. UI: static HTML + FastAPI.
-Repo: `farrux05-ai/uzpipe`.
+Repo: `farrux05-ai/chumoli`.
 
 ## Read order
 

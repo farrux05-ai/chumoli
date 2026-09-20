@@ -5,10 +5,10 @@ from __future__ import annotations
 import base64
 import hashlib
 
-from uzpipe.connectors import register_builtin_connectors
-from uzpipe.connectors.base import registry
-from uzpipe.connectors.click_uz.connector import _build_auth_header
-from uzpipe.connectors.payme_uz.connector import _auth_header
+from chumoli.connectors import register_builtin_connectors
+from chumoli.connectors.base import registry
+from chumoli.connectors.click_uz.connector import _build_auth_header
+from chumoli.connectors.payme_uz.connector import _auth_header
 
 
 def test_uz_connectors_registered() -> None:

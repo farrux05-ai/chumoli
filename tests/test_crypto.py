@@ -1,7 +1,7 @@
 """
 Encryption (Fernet) qatlami testlari.
 
-Bu testlar uzpipe.security.crypto.CredentialCipher ning asosiy
+Bu testlar chumoli.security.crypto.CredentialCipher ning asosiy
 invariantini tekshiradi: encrypt/decrypt round-trip ishonchli
 ishlashi, va noto'g'ri key bilan deshifrlash aniq xato berishi
 (InvalidToken) — ARCHITECTURE_DECISION.md 3.3 bandidagi talab.
@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from cryptography.fernet import InvalidToken
 
-from uzpipe.security.crypto import CredentialCipher
+from chumoli.security.crypto import CredentialCipher
 
 
 def test_encrypt_decrypt_round_trip(tmp_path) -> None:

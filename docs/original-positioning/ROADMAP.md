@@ -1,4 +1,4 @@
-# UzPipe — Product Roadmap & Architecture Plan
+# Chumoli — Product Roadmap & Architecture Plan
 
 > **Goal:** Lightweight, YAML-based EL data pipeline tool tailored for Uzbekistan data sources. EL only. Thin architectural layer.
 
@@ -11,7 +11,7 @@
 | **EL Only** | Extract + Load only. No transformations. Raw data preservation. |
 | **DLT Engine** | Built on top of `dlt`. Zero engine reinvention. |
 | **YAML-First** | Accessible to non-engineers and finance analysts. |
-| **Lightweight** | Single command installation via `pip install uzpipe`. |
+| **Lightweight** | Single command installation via `pip install chumoli`. |
 | **Uzbekistan-Tailored** | Solves regional data integration challenges. |
 
 ---
@@ -127,7 +127,7 @@ Sink (DuckDB | PostgreSQL | Filesystem | ClickHouse)
 Quality Checker (4 SQL checks)
     │
     ▼
-Metadata Store (DuckDB: uzpipe_runs history table)
+Metadata Store (DuckDB: chumoli_runs history table)
     │
     ▼
 Notify (Telegram | Email)

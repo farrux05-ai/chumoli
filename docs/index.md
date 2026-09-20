@@ -1,4 +1,4 @@
-# UzPipe docs
+# Chumoli docs
 
 ## Start here (AI / agents)
 

@@ -431,7 +431,7 @@ function sparkline(pipelineName){
 async function api(path,opts={}){
   const {headers:extra,...rest}=opts;
   const headers={'Content-Type':'application/json',...(extra||{})};
-  const meta=document.querySelector('meta[name="uzpipe-api-key"]');
+  const meta=document.querySelector('meta[name="chumoli-api-key"]');
   const key=meta&&meta.getAttribute('content');
   if(key) headers['X-API-Key']=key;
   const r=await fetch(API+path,{...rest,headers});

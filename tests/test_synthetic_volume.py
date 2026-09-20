@@ -1,7 +1,7 @@
 """Synthetic volume connector — no network."""
 
-from uzpipe.connectors import register_builtin_connectors
-from uzpipe.connectors.base import registry
+from chumoli.connectors import register_builtin_connectors
+from chumoli.connectors.base import registry
 
 
 def test_synthetic_registered() -> None:

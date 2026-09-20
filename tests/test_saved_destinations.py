@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import sqlite3
 
-from uzpipe.connectors import register_builtin_connectors
-from uzpipe.connectors.base import registry
-from uzpipe.core.config import DestinationConfig, PipelineConfig
-from uzpipe.core.destinations import DEST_CONNECTION_SECRET_KEY
-from uzpipe.security.crypto import CredentialCipher
-from uzpipe.store.control_store import ControlStore
+from chumoli.connectors import register_builtin_connectors
+from chumoli.connectors.base import registry
+from chumoli.core.config import DestinationConfig, PipelineConfig
+from chumoli.core.destinations import DEST_CONNECTION_SECRET_KEY
+from chumoli.security.crypto import CredentialCipher
+from chumoli.store.control_store import ControlStore
 
 
 def test_saved_destination_round_trip_encrypted(tmp_path) -> None:

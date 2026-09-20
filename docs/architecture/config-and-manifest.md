@@ -53,7 +53,7 @@ runner adapts without needing to know why.
 
 ## Why YAML was removed entirely (not just hidden)
 
-Early versions of UzPipe used a `pipeline.yml` file as input. The
+Early versions of Chumoli used a `pipeline.yml` file as input. The
 explicit requirement became: **the user must never write code or YAML
 — every value comes from a form.** Rather than keep YAML as an
 internal format that the dashboard secretly generates, `PipelineConfig`

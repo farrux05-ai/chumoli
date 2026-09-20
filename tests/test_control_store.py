@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import pytest
 
-from uzpipe.core.config import DestinationConfig, PipelineConfig
-from uzpipe.core.manifest import ConnectorCategory, ConnectorManifest, FieldSpec, FieldType
-from uzpipe.security.crypto import CredentialCipher
-from uzpipe.store.control_store import ControlStore
+from chumoli.core.config import DestinationConfig, PipelineConfig
+from chumoli.core.manifest import ConnectorCategory, ConnectorManifest, FieldSpec, FieldType
+from chumoli.security.crypto import CredentialCipher
+from chumoli.store.control_store import ControlStore
 
 TEST_MANIFEST = ConnectorManifest(
     key="test_connector",

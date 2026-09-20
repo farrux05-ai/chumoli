@@ -1,4 +1,4 @@
-# UzPipe — production image
+# Chumoli — production image
 # Build:  docker compose up --build
 # Open:   http://localhost:8000
 
@@ -18,10 +18,10 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY src ./src
 COPY static ./static
 
-# Install package so `import uzpipe` works
+# Install package so `import chumoli` works
 RUN pip install --no-cache-dir --no-deps .
 
-ENV UZPIPE_HOME=/data
+ENV CHUMOLI_HOME=/data
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/src
 
@@ -33,4 +33,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8000/api/health || exit 1
 
-CMD ["python", "-m", "uvicorn", "uzpipe.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "chumoli.api.app:app", "--host", "0.0.0.0", "--port", "8000"]

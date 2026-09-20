@@ -14,7 +14,7 @@ duplicate dlt's work.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Layer 4: UzPipe Dashboard (marimo, built from scratch)  │
+│  Layer 4: Chumoli Dashboard (marimo, built from scratch)  │
 │  - Connector selection form (manifest-driven)            │
 │  - Pipeline list, run monitor                             │
 │  - "Recover" panel (calls dlt CLI commands underneath)    │
@@ -22,7 +22,7 @@ duplicate dlt's work.
 └──────────────────────┬────────────────────────────────────┘
                         │ direct Python function calls
 ┌──────────────────────▼────────────────────────────────────┐
-│  Layer 3: UzPipe Connector layer (our core IP)            │
+│  Layer 3: Chumoli Connector layer (our core IP)            │
 │  - BaseUZConnector protocol + ConnectorRegistry            │
 │  - manifest.py per connector (form schema)                │
 │  - UZ connectors: Payme, Click, 1C, Didox, Soliq, MyGov    │
@@ -30,7 +30,7 @@ duplicate dlt's work.
 └──────────────────────┬────────────────────────────────────┘
                         │ dlt.sources.*, dlt.pipeline()
 ┌──────────────────────▼────────────────────────────────────┐
-│  Layer 2: UzPipe control plane (config + security)        │
+│  Layer 2: Chumoli control plane (config + security)        │
 │  - PipelineConfig (Pydantic, no YAML)                      │
 │  - ControlStore (SQLite): configs + encrypted credentials  │
 │  - CredentialCipher (Fernet)                                │
@@ -61,7 +61,7 @@ without touching layers 1–3.
   layer 2 and layer 1.
 - **Layer 3 (connectors):** each connector is a thin adapter that
   turns `(params, secrets)` into a `dlt.sources.DltSource`. This is
-  the only place where UzPipe code touches dlt's `dlt.sources` API
+  the only place where Chumoli code touches dlt's `dlt.sources` API
   directly — see [`connector-skill.md`](connector-skill.md) for the
   exact contract.
 - **Layer 4 (dashboard):** never imports dlt's internals directly. It

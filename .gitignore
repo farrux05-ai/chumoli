@@ -17,20 +17,21 @@ env/
 .coverage
 htmlcov/
 
-# UzPipe runtime data — HECH QACHON commit qilinmasligi kerak:
+# Chumoli runtime data — HECH QACHON commit qilinmasligi kerak:
 # bular foydalanuvchining shifrlash kaliti va pipeline credentiallarini
-# o'z ichiga oladi (qarang: src/uzpipe/security/crypto.py,
-# src/uzpipe/store/control_store.py)
+# o'z ichiga oladi (qarang: src/chumoli/security/crypto.py,
+# src/chumoli/store/control_store.py)
 *.duckdb
 *.duckdb.wal
 *.sqlite
 *.sqlite3
 *.db
 *.db-journal
-uzpipe_control.db
-uzpipe_control.db-*
+chumoli_control.db
+chumoli_control.db-*
 master.key
-.uzpipe/
+.chumoli/
+.uzpipe/  # legacy home
 
 # Editor
 .vscode/

@@ -8,7 +8,7 @@
 
 ## V1 P0 (this round)
 - **Notify:** `pipeline_runner` no longer swallows notify errors with bare `pass` — uses `log.exception("notify_failed …")` while still isolating failures from the run result
-- **CORS:** `UZPIPE_CORS_ORIGINS` env (comma-separated or `*`); default remains localhost only
+- **CORS:** `CHUMOLI_CORS_ORIGINS` env (comma-separated or `*`); default remains localhost only
 - **Recovery UI:** Pipelines table shows **Tiklash** when `last_run.success === false`; drawer loads failed-jobs + sync / drop-pending / drop-resource with confirm
 - **Async jobs:** `_RUN_JOBS` lazy cleanup of finished entries older than 1 hour
 

@@ -1,4 +1,4 @@
-# Skill: writing a new UzPipe connector
+# Skill: writing a new Chumoli connector
 
 Follow this exactly when adding a new connector (Payme, Click, 1C,
 Didox, Soliq, MyGov, or anything after). This is the practical
@@ -20,7 +20,7 @@ sources genuinely can't express the auth scheme.
 ## Step 1: create the folder
 
 ```
-src/uzpipe/connectors/<name>/
+src/chumoli/connectors/<name>/
 ├── __init__.py       # empty
 ├── manifest.py        # or inline in connector.py — see existing examples
 └── connector.py
@@ -33,7 +33,7 @@ Naming: lowercase, matches the connector key used everywhere
 ## Step 2: write the manifest
 
 ```python
-from uzpipe.core.manifest import (
+from chumoli.core.manifest import (
     ConnectorCategory, ConnectorManifest, FieldSpec, FieldType, SelectOption,
 )
 
@@ -42,7 +42,7 @@ MANIFEST = ConnectorManifest(
     label="Human-readable name shown in the dashboard",
     category=ConnectorCategory.UZ_PAYMENT,  # or UZ_GOV, UZ_ERP, UNIVERSAL
     description="One line, in Uzbek, describing what this connects to",
-    dlt_source_factory="uzpipe.connectors.<name>.connector.<ClassName>",
+    dlt_source_factory="chumoli.connectors.<name>.connector.<ClassName>",
     fields=[
         FieldSpec(key="merchant_id", label="Merchant ID", type=FieldType.TEXT, required=True),
         FieldSpec(key="api_key", label="API key", type=FieldType.PASSWORD, required=True, secret=True),
@@ -67,7 +67,7 @@ Rules (all enforced by `ConnectorManifest`'s own validation, see
 
 ```python
 from typing import Any
-from uzpipe.connectors.base import BaseUZConnector
+from chumoli.connectors.base import BaseUZConnector
 
 class YourConnector:
     manifest = MANIFEST  # class attribute, not set in __init__
@@ -100,11 +100,11 @@ HTTP request/auth logic is yours to write.
 
 ## Step 4: register it
 
-In `src/uzpipe/connectors/__init__.py`, inside
+In `src/chumoli/connectors/__init__.py`, inside
 `register_builtin_connectors()`:
 
 ```python
-from uzpipe.connectors.<name>.connector import YourConnector
+from chumoli.connectors.<name>.connector import YourConnector
 # ...
 if "your_connector_key" not in already_registered:
     registry.register(YourConnector())

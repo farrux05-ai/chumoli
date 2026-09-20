@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from uzpipe.core.config import DestinationConfig, NotifyConfig, PipelineConfig
-from uzpipe.core.notify import format_run_message, maybe_notify_run, send_telegram
+from chumoli.core.config import DestinationConfig, NotifyConfig, PipelineConfig
+from chumoli.core.notify import format_run_message, maybe_notify_run, send_telegram
 
 
 def test_format_run_message_success_clear() -> None:
@@ -57,7 +57,7 @@ def test_format_run_message_quality() -> None:
 def test_send_telegram_request_shape() -> None:
     mock_resp = MagicMock()
     mock_resp.raise_for_status = MagicMock()
-    with patch("uzpipe.core.notify.httpx.Client") as Client:
+    with patch("chumoli.core.notify.httpx.Client") as Client:
         client = Client.return_value.__enter__.return_value
         client.post.return_value = mock_resp
         send_telegram("123", "TOKEN", "hello")
@@ -72,7 +72,7 @@ def test_notify_exception_swallowed() -> None:
     store = MagicMock()
     store.get_setting.return_value = "TOKEN"
     cfg = NotifyConfig(on_failure=True, on_success=False, telegram_chat_id="1")
-    with patch("uzpipe.core.notify.send_telegram", side_effect=RuntimeError("net")):
+    with patch("chumoli.core.notify.send_telegram", side_effect=RuntimeError("net")):
         maybe_notify_run(
             store=store,
             notify_cfg=cfg,
@@ -85,11 +85,11 @@ def test_notify_exception_swallowed() -> None:
 
 
 def test_run_pipeline_notify_does_not_break(monkeypatch, tmp_path) -> None:
-    from uzpipe.connectors import register_builtin_connectors
-    from uzpipe.connectors.base import registry
-    from uzpipe.core.pipeline_runner import run_pipeline_by_name
-    from uzpipe.security.crypto import CredentialCipher
-    from uzpipe.store.control_store import ControlStore
+    from chumoli.connectors import register_builtin_connectors
+    from chumoli.connectors.base import registry
+    from chumoli.core.pipeline_runner import run_pipeline_by_name
+    from chumoli.security.crypto import CredentialCipher
+    from chumoli.store.control_store import ControlStore
 
     register_builtin_connectors()
     cipher = CredentialCipher(key_path=tmp_path / "k")
@@ -109,6 +109,6 @@ def test_run_pipeline_notify_does_not_break(monkeypatch, tmp_path) -> None:
     )
     store.save(config, {}, manifest)
 
-    with patch("uzpipe.core.notify.send_telegram", side_effect=RuntimeError("down")):
+    with patch("chumoli.core.notify.send_telegram", side_effect=RuntimeError("down")):
         result = run_pipeline_by_name("n1", store=store)
     assert result.success is True

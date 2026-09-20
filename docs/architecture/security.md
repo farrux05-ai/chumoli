@@ -4,7 +4,7 @@ Covers: `security/crypto.py`, `store/control_store.py`.
 
 ## Threat model (explicit, so scope stays honest)
 
-UzPipe is a **single-user, local-first** tool (`pip install`,
+Chumoli is a **single-user, local-first** tool (`pip install`,
 localhost). The threat this design protects against:
 
 - Credentials accidentally committed to git
@@ -28,7 +28,7 @@ anyway. Fernet (`cryptography` library — AES-128-CBC + HMAC) is the
 standard tool for exactly this "encrypt now, decrypt later, same
 owner" pattern.
 
-## Why the master key lives in a file (`~/.uzpipe/master.key`), not an env var
+## Why the master key lives in a file (`~/.chumoli/master.key`), not an env var
 
 The zero-friction requirement means the user does zero setup. A key
 file generated on first run, saved with `chmod 600`, follows the same
@@ -59,7 +59,7 @@ store is write-heavy relative to that (every pipeline create/edit from
 the dashboard writes here) and needs reliable concurrent-write
 behavior (dashboard, CLI, and a background run could all touch it).
 SQLite in WAL mode handles this well; DuckDB is not designed for it.
-`uzpipe_runs` (run history — separate file, analytical, append-mostly)
+`chumoli_runs` (run history — separate file, analytical, append-mostly)
 is the right fit for DuckDB; pipeline config is not.
 
 ## The one enforced invariant: secrets can never leak into `source_params`

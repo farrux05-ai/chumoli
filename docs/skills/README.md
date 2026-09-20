@@ -1,4 +1,4 @@
-# UzPipe Skills (for AI + humans)
+# Chumoli Skills (for AI + humans)
 
 Each skill is a **procedure**. Follow steps in order. Do not invent extra layers.
 

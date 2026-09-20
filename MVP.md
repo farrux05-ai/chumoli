@@ -1,11 +1,11 @@
-# UzPipe MVP — ishga tushirish
+# Chumoli MVP — ishga tushirish
 
 ## Talablar
 Python 3.11+, pip
 
 ## O'rnatish
 ```bash
-cd uzpipe-mvp
+cd chumoli-mvp
 pip install -e ".[dev]"
 ```
 
@@ -17,8 +17,8 @@ python -m pytest tests/ -v
 
 ## API + Dashboard
 ```bash
-PYTHONPATH=src python -m uzpipe.api.app
-# yoki: uvicorn uzpipe.api.app:app --host 0.0.0.0 --port 8000
+PYTHONPATH=src python -m chumoli.api.app
+# yoki: uvicorn chumoli.api.app:app --host 0.0.0.0 --port 8000
 ```
 
 Ochish: http://127.0.0.1:8000/

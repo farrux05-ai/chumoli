@@ -1,4 +1,4 @@
-# UzPipe — Senior DE Positioning: Who We Are and What We Do
+# Chumoli — Senior DE Positioning: Who We Are and What We Do
 
 ---
 
@@ -6,7 +6,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                        UzPipe                           │
+│                        Chumoli                           │
 │                                                         │
 │  YAML config  →  CLI (Typer+Rich)  →  Logs (structlog) │
 │       ↓                                                 │
@@ -24,7 +24,7 @@
 │       ↓                                                 │
 │  Quality (4 SQL checks, DuckDB native)                  │
 │       ↓                                                 │
-│  Metadata Store (DuckDB: uzpipe_runs history table)     │
+│  Metadata Store (DuckDB: chumoli_runs history table)     │
 │       ↓                                                 │
 │  Notify (httpx → Telegram/Email)                        │
 │       ↓                                                 │
@@ -60,7 +60,7 @@
 Weight:
 HEAVY ─────────────────────────────────── LIGHT
   │                                          │
-Airbyte    Meltano    dlt (raw)   Sling   UzPipe
+Airbyte    Meltano    dlt (raw)   Sling   Chumoli
   │           │           │         │        │
 Docker/K8s  meltano.yml  Python   YAML+CLI YAML+CLI
   UI included Singer taps Python code binary   UZ-tailored
@@ -93,12 +93,12 @@ Docker/K8s  meltano.yml  Python   YAML+CLI YAML+CLI
 
 ---
 
-## 3. UzPipe Positioning & Key Advantages
+## 3. Chumoli Positioning & Key Advantages
 
 ### Bridging Sling CLI Simplicity and dlt Power
 
 ```
-Sling ──────── UzPipe ──────── dlt (raw)
+Sling ──────── Chumoli ──────── dlt (raw)
   │               │                │
 DB→DB only    YAML-first       Python-first
 No REST       REST✓ SQL✓       REST✓ SQL✓
@@ -119,10 +119,10 @@ Didox     → Absent in all global EL tools.
 
 **2. Zero Infrastructure Requirement**
 ```bash
-pip install uzpipe
-uzpipe run pipeline.yml
+pip install chumoli
+chumoli run pipeline.yml
 ```
-Airbyte requires 8 containers and 4GB+ RAM; UzPipe runs on standard Python with minimal resource usage.
+Airbyte requires 8 containers and 4GB+ RAM; Chumoli runs on standard Python with minimal resource usage.
 
 **3. Accessible to Finance & Analytics Teams**
 ```yaml
@@ -168,13 +168,13 @@ DLT state engine automatically handles cursor tracking, state persistence, and d
 - Quick time-to-first-pipeline (< 15 minutes setup to execution)
 
 ### C) Ecosystem Scalability
-- Start with CLI (`uzpipe run`) → Scale to built-in cron (`uzpipe schedule`) → Export to Airflow (`uzpipe generate airflow`).
+- Start with CLI (`chumoli run`) → Scale to built-in cron (`chumoli schedule`) → Export to Airflow (`chumoli generate airflow`).
 
 ---
 
 ## 5. Scope Boundaries (Anti-Features)
 
-To prevent scope creep, UzPipe explicitly does **NOT**:
+To prevent scope creep, Chumoli explicitly does **NOT**:
 - ❌ Provide data transformation (use dbt)
 - ❌ Act as a data catalog (use DataHub/OpenMetadata)
 - ❌ Implement column-level lineage
@@ -190,7 +190,7 @@ To prevent scope creep, UzPipe explicitly does **NOT**:
 Core engine          → DLT 1.30 + YAML + Pydantic v2
 CLI                  → Typer + Rich (6 commands)
 BaseUZConnector      → Protocol-based framework ✅
-Metadata Store       → uzpipe_runs history table (DuckDB) ✅
+Metadata Store       → chumoli_runs history table (DuckDB) ✅
 Sources (Universal)  → rest_api (pagination ✅), sql_database ✅
 Sources (UZ Payment) → payme_uz ✅, uzum_market ✅, click_uz ✅
 Sources (UZ Gov/ERP) → soliq_uz ✅, mygov ✅, didox ✅, onec_odata ✅
@@ -208,7 +208,7 @@ Linting              → Ruff compliant ✅
 ## 7. Executive Summary
 
 ```
-UzPipe Definition:
+Chumoli Definition:
 dlt (Engine) + YAML (Config) + UZ Connectors (Moat)
 + Built-in Quality + Telegram Alerts + APScheduler
 = Lightweight, Uzbekistan-focused EL Data Pipeline Engine

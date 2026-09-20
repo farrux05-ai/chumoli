@@ -27,7 +27,7 @@ connectors/__init__.py            # +2 lines — import + registry.register(...)
 | Auth schemes differ wildly (Payme JSON-RPC + header auth, Click HMAC-SHA1, 1C Basic/OData) | Registry or config layer would need to special-case each auth type | Auth logic lives entirely inside each connector's own `build_dlt_source()` — the registry and config layers never inspect *how* a connector authenticates, only that it returns a valid `DltSource` |
 | New DB migration needed per connector (different secret fields) | `ALTER TABLE` per connector, schema churn | Secrets stored as one JSON blob column; manifest (not DB schema) defines which keys exist (`security.md`) |
 | Registering a connector wrong (e.g. missing `build_dlt_source`) fails silently at runtime | Bug discovered only when a user tries to run that pipeline | `ConnectorRegistry.register()` checks protocol conformance at import time — `TypeError` raised immediately, not at first use |
-| Connector needs pagination/rate-limiting/retry logic | Would require UzPipe to reimplement these per connector | For `rest_api`-shaped connectors, dlt's `rest_api_source` already handles pagination/auth types — the connector adapter stays a few lines (see `rest_api/connector.py`). Custom-auth UZ connectors (Payme, Click) still delegate retry/backoff to dlt's pipeline execution layer, only authentication is connector-specific |
+| Connector needs pagination/rate-limiting/retry logic | Would require Chumoli to reimplement these per connector | For `rest_api`-shaped connectors, dlt's `rest_api_source` already handles pagination/auth types — the connector adapter stays a few lines (see `rest_api/connector.py`). Custom-auth UZ connectors (Payme, Click) still delegate retry/backoff to dlt's pipeline execution layer, only authentication is connector-specific |
 
 ## Why `BaseUZConnector` is a `Protocol`, not an abstract base class
 
@@ -37,7 +37,7 @@ no forced inheritance chain, no coupling to a specific class
 hierarchy. This matters most for the two dlt-builtin-backed
 connectors (`rest_api`, `sql_database`): they are thin adapters
 around dlt's own source factories and should not be shoehorned into
-inheriting from some UzPipe-specific base class that dlt knows
+inheriting from some Chumoli-specific base class that dlt knows
 nothing about.
 
 ## Why the registry rejects duplicate keys at registration time

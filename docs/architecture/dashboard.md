@@ -58,10 +58,10 @@ dltHub's own documentation. Paid tiers start at $1,190/month.
 
 ### Why this mattered enough to reverse course
 
-UzPipe's own positioning (`docs/original-positioning/POSITIONING.md`)
+Chumoli's own positioning (`docs/original-positioning/POSITIONING.md`)
 explicitly lists Airbyte's "$1000+/month enterprise pricing" as a
 weakness to compete against. Building the dashboard on `dlthub` would
-have made UzPipe dependent on the exact kind of commercial licensing
+have made Chumoli dependent on the exact kind of commercial licensing
 gate it was positioned to avoid.
 
 ### The fix

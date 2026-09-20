@@ -8,7 +8,7 @@ __pycache__
 .git
 .gitignore
 *.duckdb
-.uzpipe
+.chumoli
 artifacts
 dist
 build

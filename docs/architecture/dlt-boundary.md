@@ -16,9 +16,9 @@ qidiruv natijasiga ishonmasdan) tasdiqlangan.
 
 ## Tasdiqlangan: dlt (Apache 2.0, `pip install dlt`) — TO'LIQ BEPUL
 
-| Imkoniyat | Nima beradi | Qayerda ishlatiladi (UzPipe'da) |
+| Imkoniyat | Nima beradi | Qayerda ishlatiladi (Chumoli'da) |
 |---|---|---|
-| `rest_api_source`, `sql_database`, `filesystem` | Universal source'lar | `src/uzpipe/connectors/rest_api/`, `sql_database/` |
+| `rest_api_source`, `sql_database`, `filesystem` | Universal source'lar | `src/chumoli/connectors/rest_api/`, `sql_database/` |
 | Schema inference, incremental state, load packages | Pipeline engine o'zagi | `pipeline_runner.py` orqali |
 | `schema_contract` (`{"tables": "evolve/freeze", "columns": ..., "data_type": ...}`) | Strukturaviy sifat nazorati: yangi jadval/ustun/tur kelganda nima qilish | Hali ulanmagan — [`quality-and-reliability.md`](quality-and-reliability.md)da rejalashtirilgan |
 | CLI: `dlt pipeline <name> trace` | Oxirgi run'ning to'liq izi | [`quality-and-reliability.md`](quality-and-reliability.md) — Tiklash bo'limi |

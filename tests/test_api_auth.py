@@ -11,16 +11,16 @@ from fastapi.testclient import TestClient
 @pytest.fixture()
 def client(monkeypatch, tmp_path):
     key = "test-secret-key-abc"
-    monkeypatch.setenv("UZPIPE_API_KEY", key)
-    monkeypatch.setenv("UZPIPE_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("CHUMOLI_API_KEY", key)
+    monkeypatch.setenv("CHUMOLI_HOME", str(tmp_path / "home"))
 
-    import uzpipe.api.app as app_mod
+    import chumoli.api.app as app_mod
 
     monkeypatch.setattr(app_mod, "_API_KEY", None)
 
-    from uzpipe.security.crypto import CredentialCipher
-    from uzpipe.store.control_store import ControlStore
-    from uzpipe.store.run_store import RunStore
+    from chumoli.security.crypto import CredentialCipher
+    from chumoli.store.control_store import ControlStore
+    from chumoli.store.run_store import RunStore
 
     cipher = CredentialCipher(key_path=tmp_path / "master.key")
     store = ControlStore(db_path=tmp_path / "control.db", cipher=cipher)

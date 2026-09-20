@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from uzpipe.store.run_store import RunStore
+from chumoli.store.run_store import RunStore
 
 
 def test_record_and_list(tmp_path: Path) -> None:

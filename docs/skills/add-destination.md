@@ -6,7 +6,7 @@
 
 Name must match dlt destination id. Add pip extra if needed.
 
-## 2. Catalog — `src/uzpipe/core/destinations.py`
+## 2. Catalog — `src/chumoli/core/destinations.py`
 
 ```python
 DestinationSpec(

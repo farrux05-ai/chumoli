@@ -10,8 +10,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import pytest
 from fastapi.testclient import TestClient
 
-from uzpipe.connectors import register_builtin_connectors
-from uzpipe.security.api_key import keys_match
+from chumoli.connectors import register_builtin_connectors
+from chumoli.security.api_key import keys_match
 
 
 class _StaticJsonHandler(BaseHTTPRequestHandler):
@@ -42,17 +42,17 @@ def local_json_server():
 @pytest.fixture()
 def api(monkeypatch, tmp_path):
     key = "test-api-key-async"
-    monkeypatch.setenv("UZPIPE_API_KEY", key)
-    monkeypatch.setenv("UZPIPE_HOME", str(tmp_path / "uzhome"))
+    monkeypatch.setenv("CHUMOLI_API_KEY", key)
+    monkeypatch.setenv("CHUMOLI_HOME", str(tmp_path / "uzhome"))
 
-    import uzpipe.api.app as app_mod
+    import chumoli.api.app as app_mod
 
     monkeypatch.setattr(app_mod, "_API_KEY", None)
     monkeypatch.setattr(app_mod, "_RUN_JOBS", {})
 
-    from uzpipe.security.crypto import CredentialCipher
-    from uzpipe.store.control_store import ControlStore
-    from uzpipe.store.run_store import RunStore
+    from chumoli.security.crypto import CredentialCipher
+    from chumoli.store.control_store import ControlStore
+    from chumoli.store.run_store import RunStore
 
     cipher = CredentialCipher(key_path=tmp_path / "master.key")
     store = ControlStore(db_path=tmp_path / "control.db", cipher=cipher)

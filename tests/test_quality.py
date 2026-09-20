@@ -14,8 +14,8 @@ from __future__ import annotations
 import dlt
 import pytest
 
-from uzpipe.core.config import QualityConfig
-from uzpipe.core.quality import run_quality_checks
+from chumoli.core.config import QualityConfig
+from chumoli.core.quality import run_quality_checks
 
 
 @pytest.fixture

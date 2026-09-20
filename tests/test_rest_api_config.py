@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from uzpipe.connectors.rest_api.connector import (
+from chumoli.connectors.rest_api.connector import (
     _build_auth_config,
     _clean_endpoint,
     _parse_max_pages,

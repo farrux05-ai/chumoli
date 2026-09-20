@@ -49,7 +49,23 @@ Response includes `total_rows`, `duration_seconds`, `rows_per_second`.
 
 ---
 
-## Option B — Local Python
+
+## Option B — pip (PyPI)
+
+```bash
+pip install chumoli
+export CHUMOLI_HOME=~/.chumoli
+chumoli-api
+# yoki: uvicorn chumoli.api.app:app --host 127.0.0.1 --port 8000
+```
+
+Open **http://localhost:8000/**
+
+CLI: `chumoli --help`
+
+---
+
+## Option C — Local Python
 
 **Requirements:** Python 3.11+
 
@@ -64,8 +80,8 @@ pip install -U pip
 pip install -r requirements.txt
 pip install -e .
 
-uzpipe-api
-# or: python -m uvicorn uzpipe.api.app:app --host 127.0.0.1 --port 8000
+chumoli-api
+# or: python -m uvicorn chumoli.api.app:app --host 127.0.0.1 --port 8000
 ```
 
 Open **http://127.0.0.1:8000/**

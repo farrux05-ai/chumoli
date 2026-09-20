@@ -7,12 +7,12 @@ from typing import Any
 import dlt
 import pytest
 
-from uzpipe.connectors import register_builtin_connectors
-from uzpipe.connectors.base import registry
-from uzpipe.core.config import DestinationConfig, PipelineConfig
-from uzpipe.core.pipeline_runner import get_failed_jobs, run_pipeline_by_name
-from uzpipe.security.crypto import CredentialCipher
-from uzpipe.store.control_store import ControlStore
+from chumoli.connectors import register_builtin_connectors
+from chumoli.connectors.base import registry
+from chumoli.core.config import DestinationConfig, PipelineConfig
+from chumoli.core.pipeline_runner import get_failed_jobs, run_pipeline_by_name
+from chumoli.security.crypto import CredentialCipher
+from chumoli.store.control_store import ControlStore
 
 
 def test_get_failed_jobs_empty_when_never_run(tmp_path) -> None:
@@ -98,7 +98,7 @@ def test_get_failed_jobs_reports_real_failure_uzbek(tmp_path, monkeypatch) -> No
         @dlt.resource(name="forced_fail")
         def _boom():
             raise RuntimeError(
-                "UZPIPE_TEST_FORCED_FAILURE: connection refused / destination unreachable"
+                "CHUMOLI_TEST_FORCED_FAILURE: connection refused / destination unreachable"
             )
             yield {"id": 1}  # pragma: no cover
 
@@ -123,6 +123,6 @@ def test_get_failed_jobs_reports_real_failure_uzbek(tmp_path, monkeypatch) -> No
     # o'zbekcha bosqich yorlig'i
     assert "bosqichida xato" in details or "extract" in details
     # haqiqiy xato matni
-    assert "uzpipe_test_forced_failure" in details or "connection refused" in details
+    assert "chumoli_test_forced_failure" in details or "connection refused" in details
     # eski soxta qator yo'q
     assert "oxirgi ish kuzatuvi mavjud" not in details

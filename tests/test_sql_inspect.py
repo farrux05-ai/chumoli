@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, text
 
-from uzpipe.connectors.sql_database.connector import inspect_sql_tables
+from chumoli.connectors.sql_database.connector import inspect_sql_tables
 
 
 def _make_sqlite(path: Path) -> str:

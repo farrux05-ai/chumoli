@@ -17,7 +17,7 @@ Only add if real need or rest_api cannot express auth.
 ## 1. Folder
 
 ```
-src/uzpipe/connectors/<key>/
+src/chumoli/connectors/<key>/
   __init__.py
   connector.py   # MANIFEST + class
 ```
@@ -30,7 +30,7 @@ MANIFEST = ConnectorManifest(
     label="Example",
     category=ConnectorCategory.UZ_PAYMENT,
     description="...",
-    dlt_source_factory="uzpipe.connectors.example_uz.connector.ExampleConnector",
+    dlt_source_factory="chumoli.connectors.example_uz.connector.ExampleConnector",
     fields=[
         FieldSpec(key="api_key", label="API key", type=FieldType.PASSWORD, required=True, secret=True),
     ],

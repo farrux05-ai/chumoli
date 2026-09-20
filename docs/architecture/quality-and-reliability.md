@@ -25,7 +25,7 @@ Covers: data quality checks, failure recovery, notifications.
 
 ## 1. Structural reliability — using dlt's own tools
 
-| dlt tool | What it does | How UzPipe exposes it |
+| dlt tool | What it does | How Chumoli exposes it |
 |---|---|---|
 | `dlt pipeline <name> failed-jobs` | Lists failed jobs with error messages | "Why did it fail?" button in dashboard |
 | `dlt pipeline <name> drop-pending-packages` | Clears half-loaded packages | Part of "Retry" action |
@@ -35,7 +35,7 @@ Covers: data quality checks, failure recovery, notifications.
 | Automatic retry on transient errors | dlt retries network blips on its own | Nothing to build — happens silently |
 | `schema_contract` (`evolve`/`freeze`/`discard_row`/`discard_value`) | Gate structural changes (new table/column/type) at ingestion | Exposed as a per-pipeline setting in the connector form: "if the source adds a new field, should we accept it, reject it, or drop just that field?" |
 
-**What UzPipe adds on top (the only new code needed here):** small
+**What Chumoli adds on top (the only new code needed here):** small
 wrapper functions in `pipeline_runner.py` that call these dlt CLI
 commands programmatically (not via shell — dlt exposes equivalent
 Python-level pipeline methods), translate error output into plain
@@ -67,7 +67,7 @@ Postgres, or any other SQL destination dlt supports.
 **Why `RunResult.success` stays load-only, not load-AND-quality:** a
 load can succeed while quality still fails (data arrived, but less of
 it than expected). Collapsing these into one boolean would hide which
-kind of failure occurred. The CLI (`uzpipe run`) makes the practical
+kind of failure occurred. The CLI (`chumoli run`) makes the practical
 call explicit: it exits 0 only when BOTH load and quality pass, but
 the underlying `RunResult.success` property intentionally still means
 "did the load itself work" — callers building on top of

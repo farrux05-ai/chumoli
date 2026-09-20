@@ -4,7 +4,7 @@ CLI testlari.
 Typer'ning `CliRunner` orqali HAQIQIY buyruqlarni ishga tushiradi
 (subprocess emas, lekin to'liq argument-parsing va chop etish yo'li
 sinaladi). ControlStore/CredentialCipher `monkeypatch` orqali tmp_path
-ga yo'naltiriladi — bu haqiqiy foydalanuvchi ~/.uzpipe papkasiga
+ga yo'naltiriladi — bu haqiqiy foydalanuvchi ~/.chumoli papkasiga
 tegmasligini ta'minlaydi.
 """
 
@@ -12,10 +12,10 @@ from __future__ import annotations
 
 from typer.testing import CliRunner
 
-from uzpipe.cli import app
-from uzpipe.core.config import DestinationConfig, PipelineConfig
-from uzpipe.security.crypto import CredentialCipher
-from uzpipe.store.control_store import ControlStore
+from chumoli.cli import app
+from chumoli.core.config import DestinationConfig, PipelineConfig
+from chumoli.security.crypto import CredentialCipher
+from chumoli.store.control_store import ControlStore
 
 runner = CliRunner()
 
@@ -24,12 +24,12 @@ def _patch_store(monkeypatch, tmp_path) -> ControlStore:
     """CLI ichida yaratiladigan ControlStore() tmp_path'ga yo'nalishi uchun.
 
     cli.py ichida `ControlStore()` argumentsiz chaqiriladi (bu ataylab
-    shunday — CLI foydalanuvchisi uchun `~/.uzpipe/` sukut bo'yicha
+    shunday — CLI foydalanuvchisi uchun `~/.chumoli/` sukut bo'yicha
     ishlashi kerak). Test uchun buni tmp_path'ga almashtiramiz.
     """
     cipher = CredentialCipher(key_path=tmp_path / "key")
     store = ControlStore(db_path=tmp_path / "control.db", cipher=cipher)
-    monkeypatch.setattr("uzpipe.cli.ControlStore", lambda: store)
+    monkeypatch.setattr("chumoli.cli.ControlStore", lambda: store)
     return store
 
 
@@ -44,8 +44,8 @@ def test_list_shows_empty_message_when_no_pipelines(monkeypatch, tmp_path) -> No
 def test_list_shows_saved_pipeline(monkeypatch, tmp_path) -> None:
     store = _patch_store(monkeypatch, tmp_path)
 
-    from uzpipe.connectors import register_builtin_connectors
-    from uzpipe.connectors.base import registry
+    from chumoli.connectors import register_builtin_connectors
+    from chumoli.connectors.base import registry
 
     register_builtin_connectors()
     manifest = registry.get_manifest("rest_api")
@@ -73,11 +73,11 @@ def test_run_missing_pipeline_exits_with_error(monkeypatch, tmp_path) -> None:
 
 
 def test_run_existing_pipeline_succeeds(monkeypatch, tmp_path) -> None:
-    """CLI orqali to'liq zanjir: forma -> save -> `uzpipe run` -> haqiqiy dlt."""
+    """CLI orqali to'liq zanjir: forma -> save -> `chumoli run` -> haqiqiy dlt."""
     store = _patch_store(monkeypatch, tmp_path)
 
-    from uzpipe.connectors import register_builtin_connectors
-    from uzpipe.connectors.base import registry
+    from chumoli.connectors import register_builtin_connectors
+    from chumoli.connectors.base import registry
 
     register_builtin_connectors()
     manifest = registry.get_manifest("sql_database")
@@ -117,9 +117,9 @@ def test_run_exits_nonzero_when_quality_check_fails(monkeypatch, tmp_path) -> No
     a clean run (see the note in cli.py's `run` command)."""
     store = _patch_store(monkeypatch, tmp_path)
 
-    from uzpipe.connectors import register_builtin_connectors
-    from uzpipe.connectors.base import registry
-    from uzpipe.core.config import QualityConfig
+    from chumoli.connectors import register_builtin_connectors
+    from chumoli.connectors.base import registry
+    from chumoli.core.config import QualityConfig
 
     register_builtin_connectors()
     manifest = registry.get_manifest("sql_database")

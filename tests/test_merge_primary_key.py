@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from uzpipe.core.config import DestinationConfig, PipelineConfig, WriteDisposition
+from chumoli.core.config import DestinationConfig, PipelineConfig, WriteDisposition
 
 
 def test_merge_without_pk_raises() -> None:

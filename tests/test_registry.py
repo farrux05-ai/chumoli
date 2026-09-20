@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import pytest
 
-from uzpipe.connectors.base import ConnectorRegistry
-from uzpipe.core.manifest import ConnectorCategory, ConnectorManifest
+from chumoli.connectors.base import ConnectorRegistry
+from chumoli.core.manifest import ConnectorCategory, ConnectorManifest
 
 
 class _FakeConnector:
@@ -74,8 +74,8 @@ def test_all_manifests_returns_manifests_not_connectors() -> None:
 
 def test_builtin_sql_connectors_registered() -> None:
     """PostgreSQL, MySQL va generic sql_database bir xil build mantig'i bilan ro'yxatda."""
-    from uzpipe.connectors import register_builtin_connectors
-    from uzpipe.connectors.base import registry
+    from chumoli.connectors import register_builtin_connectors
+    from chumoli.connectors.base import registry
 
     register_builtin_connectors()
     keys = {m.key for m in registry.all_manifests()}

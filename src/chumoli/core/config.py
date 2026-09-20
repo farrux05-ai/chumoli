@@ -1,0 +1,90 @@
+"""chumoli.core.config — PipelineConfig (format-agnostic, no dlt import)."""
+
+from __future__ import annotations
+
+from enum import Enum
+from typing import Any
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+class WriteDisposition(str, Enum):
+    APPEND = "append"
+    REPLACE = "replace"
+    MERGE = "merge"
+
+
+class ScheduleKind(str, Enum):
+    MANUAL = "manual"
+    INTERVAL = "interval"
+    AIRFLOW = "airflow"
+
+
+class ScheduleConfig(BaseModel):
+    kind: ScheduleKind = ScheduleKind.MANUAL
+    interval_minutes: int | None = Field(default=None)
+
+    @field_validator("interval_minutes")
+    @classmethod
+    def _require_interval_when_needed(cls, v: int | None, info: Any) -> int | None:
+        if info.data.get("kind") == ScheduleKind.INTERVAL and not v:
+            raise ValueError("kind=INTERVAL uchun interval_minutes majburiy")
+        return v
+
+
+class DestinationConfig(BaseModel):
+    connector: str = Field(..., description="duckdb|postgresql|clickhouse|filesystem")
+    connection: str | None = Field(default=None)
+    dataset_name: str = Field(default="raw")
+
+
+class QualityConfig(BaseModel):
+    row_count_min: int | None = None
+    not_null_columns: list[str] = Field(default_factory=list)
+    no_duplicates_key: str | None = None
+    freshness_max_minutes: int | None = None
+    freshness_column: str | None = None
+    table_name: str | None = None
+
+
+class NotifyConfig(BaseModel):
+    on_failure: bool = True
+    on_success: bool = False
+    telegram_chat_id: str | None = None
+
+
+class PipelineConfig(BaseModel):
+    name: str
+    connector_key: str
+    source_params: dict[str, Any] = Field(default_factory=dict)
+    destination: DestinationConfig
+    write_disposition: WriteDisposition = WriteDisposition.APPEND
+    primary_key: list[str] = Field(default_factory=list)
+    schedule: ScheduleConfig = Field(default_factory=ScheduleConfig)
+    quality: QualityConfig = Field(default_factory=QualityConfig)
+    notify: NotifyConfig = Field(default_factory=NotifyConfig)
+
+    @field_validator("name")
+    @classmethod
+    def _name_is_filesystem_safe(cls, v: str) -> str:
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("Pipeline nomi bo'sh bo'lishi mumkin emas")
+        allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+        if not set(cleaned) <= allowed:
+            raise ValueError(
+                "Pipeline nomida faqat harf, raqam, '_' va '-' bo'lishi mumkin"
+            )
+        return cleaned
+
+    @model_validator(mode="after")
+    def merge_requires_primary_key(self) -> "PipelineConfig":
+        if self.write_disposition == WriteDisposition.MERGE and not self.primary_key:
+            raise ValueError(
+                "write_disposition=merge uchun primary_key majburiy "
+                "(bo'sh ro'yxat bilan merge ishlamaydi)"
+            )
+        return self
+
+    def to_storable_dict(self) -> dict[str, Any]:
+        return self.model_dump(mode="json")

@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from uzpipe.core.manifest import (
+from chumoli.core.manifest import (
     ConnectorCategory,
     ConnectorManifest,
     FieldSpec,

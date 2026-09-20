@@ -1,16 +1,16 @@
 services:
-  uzpipe:
+  chumoli:
     build: .
-    image: uzpipe:0.1.0
+    image: chumoli:0.1.0
     ports:
-      # Bind to localhost only. Exposing 0.0.0.0 requires UZPIPE_API_KEY + TLS reverse proxy.
+      # Bind to localhost only. Exposing 0.0.0.0 requires CHUMOLI_API_KEY + TLS reverse proxy.
       - "127.0.0.1:8000:8000"
     volumes:
-      - uzpipe_data:/data
+      - chumoli_data:/data
     environment:
-      UZPIPE_HOME: /data
+      CHUMOLI_HOME: /data
       # Optional: set explicitly; otherwise auto-generated in /data/api.key
-      # UZPIPE_API_KEY: change-me
+      # CHUMOLI_API_KEY: change-me
       PYTHONUNBUFFERED: "1"
     restart: unless-stopped
     healthcheck:
@@ -21,4 +21,4 @@ services:
       start_period: 25s
 
 volumes:
-  uzpipe_data:
+  chumoli_data:

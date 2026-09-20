@@ -1,10 +1,10 @@
-# UzPipe Architecture
+# Chumoli Architecture
 
 **Audience:** human + AI agents. Read this before changing code.
 
 ## One sentence
 
-UzPipe is a **thin control plane + UZ connectors** on top of **unmodified dlt**. We do not reimplement extract/load.
+Chumoli is a **thin control plane + UZ connectors** on top of **unmodified dlt**. We do not reimplement extract/load.
 
 ## Layers (do not blur)
 
