@@ -58,6 +58,28 @@ _DLT_DEST_ALIASES: dict[str, str] = {
     "postgresql": "postgres",
 }
 
+# Rough scheme hints so a Postgres URL is never passed to ClickHouse (and vice versa).
+_DEST_SCHEME_HINTS: dict[str, tuple[str, ...]] = {
+    "postgresql": ("postgresql://", "postgres://", "postgresql+", "postgres+"),
+    "clickhouse": ("clickhouse://", "clickhouses://", "http://", "https://"),
+}
+
+
+def _warn_connection_scheme(dest_key: str, connection: str) -> None:
+    """Log if connection string clearly belongs to another destination type."""
+    if not connection or not isinstance(connection, str):
+        return
+    low = connection.strip().lower()
+    for other_key, prefixes in _DEST_SCHEME_HINTS.items():
+        if other_key == dest_key:
+            continue
+        if any(low.startswith(p) for p in prefixes):
+            # Likely UI cache leak: PG string saved under ClickHouse (or reverse)
+            raise ValueError(
+                f"Destination '{dest_key}' uchun connection boshqa turga o'xshaydi "
+                f"({other_key}). Destination turini tekshiring yoki connection ni qayta kiriting."
+            )
+
 
 def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
     from chumoli.core.paths import (
@@ -81,14 +103,28 @@ def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
         bucket_url = resolve_filesystem_url(connection, config.name)
         destination: Any = dlt.destinations.filesystem(bucket_url=bucket_url)
     elif connection:
+        _warn_connection_scheme(dest_key, connection)
         try:
             destination_factory = getattr(dlt.destinations, dlt_key)
         except AttributeError as e:
+            extra = dlt_key
             raise ValueError(
-                f"dlt destination '{dest_key}' (dlt key '{dlt_key}') topilmadi. "
-                f"Kerak bo'lsa: pip install \"dlt[{dlt_key}]\""
+                f"dlt destination '{dest_key}' o'rnatilmagan (dlt key: '{dlt_key}'). "
+                f"O'rnating: pip install \"dlt[{extra}]\"  "
+                f"yoki boshqa destination tanlang (DuckDB / PostgreSQL / Fayl)."
             ) from e
-        destination = destination_factory(credentials=connection)
+        try:
+            destination = destination_factory(credentials=connection)
+        except Exception as e:
+            # Surface missing extra / wrong credentials clearly
+            msg = str(e).lower()
+            if "no module" in msg or "not installed" in msg or "extra" in msg:
+                raise ValueError(
+                    f"Destination '{dest_key}' uchun dlt extra kerak: "
+                    f'pip install "dlt[{dlt_key}]". '
+                    f"Asl xato: {e}"
+                ) from e
+            raise
     else:
         destination = dlt_key
 

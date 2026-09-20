@@ -30,6 +30,7 @@ from chumoli.core.destinations import (
     DEST_CONNECTION_SECRET_KEY,
     all_destinations,
     get_destination,
+    is_destination_available,
 )
 from chumoli.core.pipeline_runner import (
     PipelineAlreadyRunning,
@@ -396,6 +397,13 @@ def create_saved_destination(body: SavedDestinationBody) -> dict[str, str]:
     dest_spec = get_destination(body.connector)
     if dest_spec is None:
         raise HTTPException(400, f"Noma'lum destination: {body.connector}")
+    if not is_destination_available(body.connector):
+        extra = dest_spec.dlt_extra or body.connector
+        raise HTTPException(
+            422,
+            f"{dest_spec.label} o'rnatilmagan. "
+            f'pip install "dlt[{extra}]" qiling yoki boshqa destination tanlang.',
+        )
     if dest_spec.needs_connection and not (body.connection or "").strip():
         raise HTTPException(422, f"{dest_spec.label} uchun connection majburiy")
     try:
@@ -560,6 +568,13 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
     dest_spec = get_destination(dest.connector)
     if dest_spec is None:
         raise HTTPException(400, f"Noma'lum destination: {dest.connector}")
+    if not is_destination_available(dest.connector):
+        extra = dest_spec.dlt_extra or dest.connector
+        raise HTTPException(
+            422,
+            f"{dest_spec.label} o'rnatilmagan. "
+            f'pip install "dlt[{extra}]" qiling yoki boshqa destination tanlang.',
+        )
     if dest_spec.needs_connection and not (dest.connection or "").strip():
         raise HTTPException(422, f"{dest_spec.label} uchun connection majburiy")
 

@@ -460,7 +460,8 @@ function openDrawer(){ document.getElementById('overlay').classList.add('show');
 function closeDrawer(){
   document.getElementById('overlay').classList.remove('show');
   document.getElementById('drawer').classList.remove('open');
-  step=1; selectedConnector=null; syncSteps();
+  step=1; selectedConnector=null; editingName=null; draft={}; testState='idle';
+  inspectedTables=[]; inspectedDbLabel=''; inspectedColumns={}; syncSteps();
 }
 document.getElementById('drawer-close').onclick=closeDrawer;
 document.getElementById('overlay').onclick=closeDrawer;
@@ -1446,8 +1447,12 @@ function renderStepTables(body,foot){
 }
 
 function renderStepDestAndSave(body,foot){
-  const destOpts=(destinations.length?destinations:[{key:'duckdb',label:'DuckDB',needs_connection:false}])
-    .map(d=>`<option value="${d.key}" data-needs="${d.needs_connection?1:0}" ${dv('f-dest','duckdb')===d.key?'selected':''}>${d.label}</option>`).join('');
+  const destOpts=(destinations.length?destinations:[{key:'duckdb',label:'DuckDB',needs_connection:false,available:true}])
+    .map(d=>{
+      const avail=d.available!==false;
+      const label=avail?d.label:(d.label+' (o\'rnatilmagan)');
+      return `<option value="${d.key}" data-needs="${d.needs_connection?1:0}" ${avail?'':'disabled'} ${dv('f-dest','duckdb')===d.key&&avail?'selected':''}>${label}</option>`;
+    }).join('');
   const savedOpts=(savedDestinations||[]).map(s=>`<option value="${esc(s.id)}" ${dv('f-saved-dest','')===s.id?'selected':''}>${esc(s.label)} (${esc(s.connector)})</option>`).join('');
   const wdVal=dv('f-wd','replace');
   const schedKindVal=dv('f-sched-kind','manual');
@@ -1471,7 +1476,7 @@ function renderStepDestAndSave(body,foot){
       </div>
       <div class="field" id="dest-conn-wrap" style="display:none">
         <label id="dest-conn-label">Connection</label>
-        <input id="f-dest-conn" type="password" placeholder="" value="${esc(dv('f-dest-conn',''))}"/>
+        <input id="f-dest-conn" type="password" placeholder="" value="" autocomplete="off"/>
         <div class="field-hint" id="dest-conn-help"></div>
       </div>
       <div class="field">
@@ -1608,7 +1613,7 @@ function renderStepDestAndSave(body,foot){
 
   const destSel=document.getElementById('f-dest');
   const destMode=document.getElementById('f-dest-mode');
-  // Per-destination connection cache — switching PG→ClickHouse must not leak the URL
+  // Per-destination connection cache — never share PG/CH/filesystem URLs across keys
   if(!draft._destConnByKey) draft._destConnByKey={};
   let _lastDestKey=destSel?.value||'duckdb';
   const syncDest=()=>{
@@ -1624,6 +1629,8 @@ function renderStepDestAndSave(body,foot){
     }
     _lastDestKey=key;
     draft['f-dest']=key;
+    // Drop shared fallback so old PG string cannot leak into ClickHouse/others
+    delete draft['f-dest-conn'];
     if(fmtWrap) fmtWrap.style.display=isFs?'block':'none';
     // Filesystem: always show optional path (even if needs_connection=false)
     if(d?.needs_connection || isFs){
@@ -1632,10 +1639,9 @@ function renderStepDestAndSave(body,foot){
       if(connEl){
         connEl.placeholder=d?.connection_placeholder||'';
         connEl.type=isFs?'text':'password';
-        // Restore this destination's own value (not the previous one)
+        // Only this destination's own cached value (empty if never set)
         const cached=draft._destConnByKey[key];
-        const fallback=(key===draft['f-dest'] && draft['f-dest-conn'] && !draft._destConnByKey[key] && Object.keys(draft._destConnByKey).length===0)?(draft['f-dest-conn']||''):'';
-        connEl.value=(cached!==undefined)?cached:(fallback||'');
+        connEl.value=(cached!==undefined && cached!==null)?cached:'';
         draft._destConnByKey[key]=connEl.value;
       }
       document.getElementById('dest-conn-help').textContent=d?.connection_help||'';
@@ -1659,7 +1665,6 @@ function renderStepDestAndSave(body,foot){
       connEl.addEventListener('input',()=>{
         const k=destSel.value||'duckdb';
         draft._destConnByKey[k]=connEl.value||'';
-        draft['f-dest-conn']=connEl.value||'';
       });
     }
     syncDest();
@@ -1819,11 +1824,12 @@ async function savePipeline(){
     const destKey=document.getElementById('f-dest')?.value||'duckdb';
     const destConnEl=document.getElementById('f-dest-conn');
     dest={connector:destKey,dataset_name:(document.getElementById('f-dataset')||{}).value||'raw'};
-    // Prefer live input for current dest; fall back to per-key cache (never leak other dest URLs)
+    // Only connection for the selected dest key (never another destination's URL)
     let connVal='';
-    if(destConnEl&&destConnEl.offsetParent!==null){
+    if(destConnEl && (destConnEl.offsetParent!==null || destKey==='filesystem')){
       connVal=(destConnEl.value||'').trim();
-    }else if(draft._destConnByKey&&draft._destConnByKey[destKey]){
+    }
+    if(!connVal && draft._destConnByKey && Object.prototype.hasOwnProperty.call(draft._destConnByKey, destKey)){
       connVal=String(draft._destConnByKey[destKey]||'').trim();
     }
     if(connVal) dest.connection=connVal;
