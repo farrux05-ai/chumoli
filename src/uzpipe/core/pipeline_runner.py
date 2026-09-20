@@ -52,6 +52,9 @@ class RunResult:
 
 
 def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
+    import os
+    from pathlib import Path
+
     destination_kwargs: dict[str, Any] = {}
     if config.destination.connection:
         destination_kwargs["credentials"] = config.destination.connection
@@ -62,10 +65,16 @@ def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
     else:
         destination = config.destination.connector
 
+    # Isolate dlt working dir (tests + multi-pipeline stability)
+    home = Path(os.environ.get("UZPIPE_HOME", Path.home() / ".uzpipe"))
+    pipelines_dir = home / "pipelines"
+    pipelines_dir.mkdir(parents=True, exist_ok=True)
+
     return dlt.pipeline(
         pipeline_name=config.name,
         destination=destination,
         dataset_name=config.destination.dataset_name,
+        pipelines_dir=str(pipelines_dir),
     )
 
 
@@ -324,6 +333,8 @@ def get_preview_rows(
     _, stored = _load_stored(name, store)
     pipeline = build_dlt_pipeline(stored.config)
     limit = max(1, min(int(limit), 100))
+    dataset = stored.config.destination.dataset_name or "raw"
+
     try:
         user_tables = [
             t
@@ -337,11 +348,14 @@ def get_preview_rows(
         with pipeline.sql_client() as client:
             for table_name in user_tables[:3]:
                 try:
-                    rows = client.execute_sql(
-                        f'SELECT * FROM "{table_name}" LIMIT {limit}'
-                    )
-                    row_lists = [list(r) for r in (rows or [])]
-                    result[table_name] = {"columns": [], "rows": row_lists}
+                    # Schema-qualified name required for DuckDB / multi-dataset destinations
+                    fqn = f'"{dataset}"."{table_name}"'
+                    with client.execute_query(
+                        f"SELECT * FROM {fqn} LIMIT %s", limit
+                    ) as cursor:
+                        columns = [d[0] for d in (cursor.description or [])]
+                        rows = [list(r) for r in cursor.fetchall()]
+                    result[table_name] = {"columns": columns, "rows": rows}
                 except Exception as e:
                     result[table_name] = {"error": str(e), "columns": [], "rows": []}
         return {"tables": result}

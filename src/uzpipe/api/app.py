@@ -407,7 +407,9 @@ class SqlInspectBody(BaseModel):
 
 @app.post("/api/connectors/sql_database/inspect", dependencies=[Depends(require_api_key)])
 def inspect_sql_database(body: SqlInspectBody) -> dict[str, Any]:
-    """Live DB schema scan — table names only (sql_database / postgresql / mysql)."""
+    """Live DB schema scan — table names + database label."""
+    from sqlalchemy.engine.url import make_url
+
     from uzpipe.connectors.sql_database.connector import inspect_sql_tables
 
     try:
@@ -416,7 +418,17 @@ def inspect_sql_database(body: SqlInspectBody) -> dict[str, Any]:
         raise HTTPException(422, str(e)) from e
     except Exception as e:
         raise HTTPException(500, f"Inspect xatosi: {e}") from e
-    return {"tables": tables, "count": len(tables)}
+
+    db_label = ""
+    try:
+        url = make_url(body.connection_string)
+        db_label = url.database or ""
+        if db_label and "/" in db_label:
+            db_label = db_label.rsplit("/", 1)[-1]
+    except Exception:
+        pass
+
+    return {"tables": tables, "count": len(tables), "database": db_label}
 
 
 @app.get("/api/connectors", dependencies=[Depends(require_api_key)])

@@ -319,7 +319,7 @@ function connectorIcon(key){ return CONNECTOR_ICONS[key] || `<svg width="18" hei
 let connectors = [], destinations = [], savedDestinations = [], pipelines = [], runs = [], runStats = {};
 let scheduler = {}, telegramCfg = {configured:false};
 let page = 'pipelines', selectedConnector = null, step = 1, draft = {}, editingName = null;
-let testState = 'idle', inspectedTables = [], pollTimers = {}, recoverPipeline = null;
+let testState = 'idle', inspectedTables = [], inspectedDbLabel = '', pollTimers = {}, recoverPipeline = null;
 
 function isSqlConnector(k){ return ['sql_database','postgresql','mysql'].includes(k); }
 
@@ -452,16 +452,30 @@ async function loadAll(){
     document.getElementById('foot-dot').classList.add('off');
     document.getElementById('foot-text').textContent='Offline';
   }
-  try{
-    const [c,p,d,sd,r]=await Promise.all([
-      api('/api/connectors'),
-      api('/api/pipelines'),
-      api('/api/destinations').catch(()=>[]),
-      api('/api/destinations/saved').catch(()=>[]),
-      api('/api/runs?limit=50').catch(()=>[]),
-    ]);
-    connectors=c; pipelines=p; destinations=d; savedDestinations=sd||[]; runs=r||[];
-  }catch(e){ toast('Yuklash xatosi: '+e.message,'err'); }
+
+  const results=await Promise.allSettled([
+    api('/api/connectors'),
+    api('/api/pipelines'),
+    api('/api/destinations').catch(()=>[]),
+    api('/api/destinations/saved').catch(()=>[]),
+    api('/api/runs?limit=50').catch(()=>[]),
+  ]);
+  const [cR,pR,dR,sdR,rR]=results;
+
+  if(cR.status==='rejected'){
+    const e=cR.reason;
+    if(e&&e.status===401) toast("API key noto'g'ri yoki yo'q. Sahifani yangilang.",'err');
+    else toast('Connectorlar yuklanmadi: '+(e&&e.message?e.message:e),'err');
+  }else{ connectors=cR.value; }
+
+  if(pR.status==='rejected'){
+    toast("Pipeline'lar yuklanmadi: "+(pR.reason&&pR.reason.message?pR.reason.message:pR.reason),'err');
+  }else{ pipelines=pR.value; }
+
+  destinations=dR.status==='fulfilled'?dR.value:[];
+  savedDestinations=sdR.status==='fulfilled'?sdR.value:[];
+  runs=rR.status==='fulfilled'?rR.value:[];
+
   render();
 }
 
@@ -622,14 +636,40 @@ async function previewPipeline(name){
     }
     const tables=res.tables||{};
     const names=Object.keys(tables);
-    if(!names.length){ toast('Ko‘rsatish uchun ma’lumot yo‘q','err'); return; }
-    let msg=names.map(t=>{
-      const info=tables[t];
-      if(info.error) return t+': '+info.error;
-      const n=(info.rows||[]).length;
-      return t+': '+n+' qator (preview)';
-    }).join(' · ');
-    toast(name+' — '+msg,'ok');
+    if(!names.length){ toast("Ko'rsatish uchun ma'lumot yo'q",'err'); return; }
+
+    document.getElementById('drawer-title').textContent=name+' — Preview';
+    const body=document.getElementById('drawer-body');
+    const foot=document.getElementById('drawer-foot');
+    let html='';
+    for(const tbl of names){
+      const info=tables[tbl];
+      if(info.error){
+        html+=`<div style="margin-bottom:16px">
+          <div class="section-title">${esc(tbl)}</div>
+          <div class="field-err">${esc(info.error)}</div>
+        </div>`;
+        continue;
+      }
+      const cols=info.columns||[];
+      const rows=info.rows||[];
+      html+=`<div style="margin-bottom:20px">
+        <div class="section-title">${esc(tbl)} — ${rows.length} qator</div>
+        <div class="table-wrap" style="overflow-x:auto;max-height:280px">
+          <table>
+            <thead><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead>
+            <tbody>
+              ${rows.map(r=>`<tr>${r.map(v=>
+                `<td class="mono" style="font-size:12px;white-space:nowrap">${esc(v==null?'NULL':String(v))}</td>`
+              ).join('')}</tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+    }
+    body.innerHTML=html;
+    foot.innerHTML=`<button class="btn btn-ghost" onclick="closeDrawer()">Yopish</button>`;
+    openDrawer();
   }catch(e){ toast(e.message,'err'); }
 }
 
@@ -660,7 +700,7 @@ function renderConnectors(){
       </div>`).join('')}`;
 
   c.querySelectorAll('[data-ck]').forEach(b=>b.onclick=()=>{
-    selectedConnector=b.dataset.ck; draft={}; editingName=null; testState='idle'; inspectedTables=[];
+    selectedConnector=b.dataset.ck; draft={}; editingName=null; testState='idle'; inspectedTables=[]; inspectedDbLabel="";
     step=2; document.getElementById('drawer-title').textContent='Yangi pipeline';
     renderDrawer(); openDrawer();
   });
@@ -960,7 +1000,7 @@ async function delPipeline(name){
 /* ── ADD / EDIT ───────────────────────────────────────── */
 async function startAdd(){
   if(!telegramCfg.configured){ try{ telegramCfg=await api('/api/settings/telegram'); }catch{} }
-  step=1; selectedConnector=null; draft={}; editingName=null; testState='idle'; inspectedTables=[];
+  step=1; selectedConnector=null; draft={}; editingName=null; testState='idle'; inspectedTables=[]; inspectedDbLabel="";
   document.getElementById('drawer-title').textContent='Yangi pipeline';
   renderDrawer(); openDrawer();
 }
@@ -991,7 +1031,7 @@ async function startEdit(name){
     draft['f-n-fail']=notif.on_failure!==false;
     draft['f-n-ok']=!!notif.on_success;
     testState=isSqlConnector(selectedConnector)&&(cfg.source_params?.table_names||'').trim()?'ok':'idle';
-    inspectedTables=[]; step=2;
+    inspectedTables=[]; inspectedDbLabel=""; step=2;
     document.getElementById('drawer-title').textContent='Tahrirlash: '+name;
     renderDrawer(); openDrawer();
   }catch(e){ toast(e.message,'err'); }
@@ -1041,17 +1081,21 @@ function renderStepConnector(body,foot){
       </div>
     </div>`).join('');
   body.querySelectorAll('[data-ck]').forEach(b=>b.onclick=()=>{
-    if(selectedConnector!==b.dataset.ck){ draft={}; testState='idle'; inspectedTables=[]; }
+    if(selectedConnector!==b.dataset.ck){ draft={}; testState='idle'; inspectedTables=[]; inspectedDbLabel=""; }
     selectedConnector=b.dataset.ck; editingName=null; renderDrawer();
   });
   foot.innerHTML=`<button class="btn btn-primary" id="next1" ${selectedConnector?'':'disabled'}>Keyingi →</button>`;
   document.getElementById('next1')?.addEventListener('click',()=>{ step=2; renderDrawer(); });
 }
 
+const AUTH_FIELDS=new Set(['auth_type','auth_key_name','auth_location','max_pages']);
+
 function renderStepConnection(body,foot){
   const m=connectors.find(x=>x.key===selectedConnector);
   const isSql=isSqlConnector(selectedConnector);
-  const connFields=(m?.fields||[]).filter(f=>f.secret||f.key==='connection_string'||f.key==='base_url');
+  const connFields=(m?.fields||[]).filter(f=>
+    f.secret||f.key==='connection_string'||f.key==='base_url'||AUTH_FIELDS.has(f.key)
+  );
   const fieldsToShow=connFields.length?connFields:(m?.fields||[]).filter(f=>!['table_names','cursor_column','resources'].includes(f.key));
   let statusHtml='';
   if(isSql){
@@ -1077,14 +1121,16 @@ function renderStepConnection(body,foot){
   };
   document.getElementById('btn-inspect')?.addEventListener('click',runSqlInspect);
   document.getElementById('f-connection_string')?.addEventListener('input',()=>{
-    if(testState==='ok'){ testState='idle'; inspectedTables=[]; document.getElementById('next2').disabled=true; }
+    if(testState==='ok'){ testState='idle'; inspectedTables=[]; inspectedDbLabel=""; document.getElementById('next2').disabled=true; }
   });
 }
 
 function renderStepTables(body,foot){
   const m=connectors.find(x=>x.key===selectedConnector);
   const isSql=isSqlConnector(selectedConnector);
-  const step2Keys=new Set((m?.fields||[]).filter(f=>f.secret||f.key==='connection_string'||f.key==='base_url').map(f=>f.key));
+  const step2Keys=new Set((m?.fields||[])
+    .filter(f=>f.secret||f.key==='connection_string'||f.key==='base_url'||AUTH_FIELDS.has(f.key))
+    .map(f=>f.key));
   const resourceKeys=new Set(['table_names','cursor_column','resources','endpoint','from_days_ago']);
   const fields=(m?.fields||[]).filter(f=>!step2Keys.has(f.key)&&(resourceKeys.has(f.key)||(!f.secret&&f.key!=='connection_string'&&f.key!=='base_url')));
 
@@ -1093,6 +1139,7 @@ function renderStepTables(body,foot){
     const current=new Set(String(dv('f-table_names','')).split(',').map(s=>s.trim()).filter(Boolean));
     const tables=inspectedTables.length?inspectedTables:[...current];
     tablesBlock=`
+      ${inspectedDbLabel?`<div class="field-hint" style="margin-bottom:8px">Manba: <strong>${esc(inspectedDbLabel)}</strong></div>`:''}
       <div class="field">
         <label>Jadvallar *</label>
         <input id="f-table_names" type="hidden" value="${esc(dv('f-table_names',''))}"/>
@@ -1293,7 +1340,10 @@ function renderStepDestAndSave(body,foot){
 
 function fieldHtml(f){
   const req=f.required?' *':'';
-  const savedVal=draft['f-'+f.key]??f.default??'';
+  // Prefer explicit draft value (including empty string); only fall back to default when unset
+  const savedVal=(draft['f-'+f.key]!==undefined&&draft['f-'+f.key]!==null)
+    ? draft['f-'+f.key]
+    : (f.default??'');
   if(f.type==='select'){
     return `<div class="field"><label>${esc(f.label)}${req}</label>
       <select id="f-${esc(f.key)}">${(f.options||[]).map(o=>`<option value="${esc(o.value)}" ${savedVal===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}</select>
@@ -1320,11 +1370,16 @@ async function runSqlInspect(){
   testState='idle';
   try{
     const res=await api('/api/connectors/sql_database/inspect',{method:'POST',body:JSON.stringify({connection_string:conn})});
-    inspectedTables=res.tables||[]; testState='ok';
-    toast(inspectedTables.length?(inspectedTables.length+' jadval topildi'):"Ulanish OK (jadval yo'q)");
+    inspectedTables=res.tables||[];
+    inspectedDbLabel=res.database||'';
+    testState='ok';
+    const dbLabel=inspectedDbLabel?` (${inspectedDbLabel})`:'';
+    toast(inspectedTables.length
+      ? (inspectedTables.length+' jadval topildi'+dbLabel)
+      : ("Ulanish OK — jadval yo'q"+dbLabel));
     renderDrawer();
   }catch(e){
-    testState='fail'; inspectedTables=[]; toast(e.message,'err');
+    testState='fail'; inspectedTables=[]; inspectedDbLabel=""; toast(e.message,'err');
     if(btn){ btn.disabled=false; btn.textContent='Ulanishni tekshirish'; }
     renderDrawer();
   }
