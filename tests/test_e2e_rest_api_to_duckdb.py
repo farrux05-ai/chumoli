@@ -74,7 +74,8 @@ def local_json_server():
     thread.join(timeout=2)
 
 
-def test_full_flow_rest_api_to_duckdb(tmp_path, local_json_server) -> None:
+def test_full_flow_rest_api_to_duckdb(tmp_path, local_json_server, monkeypatch) -> None:
+    monkeypatch.setenv("CHUMOLI_HOME", str(tmp_path / "home"))
     # --- 0. Fundament sozlash: registry, encryption, store — hammasi tmp_path'da izolyatsiyalangan
     register_builtin_connectors()
     cipher = CredentialCipher(key_path=tmp_path / "key")
@@ -136,7 +137,8 @@ def test_full_flow_rest_api_to_duckdb(tmp_path, local_json_server) -> None:
     assert rows == [(1, "Birinchi yozuv"), (2, "Ikkinchi yozuv")]
 
 
-def test_full_flow_with_quality_checks_via_run_pipeline_by_name(tmp_path, local_json_server) -> None:
+def test_full_flow_with_quality_checks_via_run_pipeline_by_name(tmp_path, local_json_server, monkeypatch) -> None:
+    monkeypatch.setenv("CHUMOLI_HOME", str(tmp_path / "home"))
     """Same full chain as above, but through the PUBLIC entry point
     (run_pipeline_by_name, not _execute) with QualityConfig set —
     proves quality checks are actually wired into the real path a

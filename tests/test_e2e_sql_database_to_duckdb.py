@@ -38,7 +38,8 @@ def source_sqlite_db(tmp_path):
     return db_path
 
 
-def test_full_flow_sql_database_to_duckdb(tmp_path, source_sqlite_db) -> None:
+def test_full_flow_sql_database_to_duckdb(tmp_path, source_sqlite_db, monkeypatch) -> None:
+    monkeypatch.setenv("CHUMOLI_HOME", str(tmp_path / "home"))
     register_builtin_connectors()
     cipher = CredentialCipher(key_path=tmp_path / "key")
     store = ControlStore(db_path=tmp_path / "control.db", cipher=cipher)

@@ -83,7 +83,7 @@ class ControlStore:
                 "Bu maydonlar faqat raw_secrets orqali uzatilishi kerak."
             )
 
-        # Destination connection is also a secret
+        # Destination connection is also a secret (from raw_secrets and/or config)
         extra_secret_keys = set(secret_keys)
         if DEST_CONNECTION_SECRET_KEY in raw_secrets:
             extra_secret_keys.add(DEST_CONNECTION_SECRET_KEY)
@@ -93,12 +93,14 @@ class ControlStore:
             raise ValueError(f"Quyidagi maxfiy maydonlar yetishmayapti: {missing}")
 
         to_encrypt = {k: v for k, v in raw_secrets.items() if k in extra_secret_keys}
-        encrypted_secrets = self._cipher.encrypt_dict(to_encrypt)
 
         storable = config.model_copy(deep=True)
         if storable.destination.connection:
-            # never persist plaintext connection in config_json
+            # Move path/URL into encrypted secrets — never leave plaintext in config_json
+            to_encrypt[DEST_CONNECTION_SECRET_KEY] = storable.destination.connection
             storable.destination.connection = None
+
+        encrypted_secrets = self._cipher.encrypt_dict(to_encrypt)
 
         with self._connect() as conn:
             conn.execute(
