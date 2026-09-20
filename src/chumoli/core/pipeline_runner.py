@@ -14,6 +14,7 @@ import dlt
 from chumoli.connectors.base import BaseUZConnector, registry
 from chumoli.core.config import PipelineConfig
 from chumoli.core.quality import QualityReport, run_quality_checks
+from chumoli.core.row_counts import get_row_counts
 from chumoli.store.control_store import ControlStore, StoredPipeline
 
 log = logging.getLogger("chumoli.pipeline_runner")
@@ -177,15 +178,27 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
 
     load_succeeded = not load_info.has_failed_jobs
     _set_run_step(name, "count" if load_succeeded else "failed")
-    row_counts = _get_row_counts(pipeline) if load_succeeded else {}
+    row_counts = (
+        get_row_counts(
+            pipeline,
+            dest_key=dest.connector,
+            load_info=load_info,
+        )
+        if load_succeeded
+        else {}
+    )
     if row_counts:
         _set_run_step(name, "count", rows_so_far=sum(row_counts.values()))
 
     if load_succeeded:
         _set_run_step(name, "quality")
-        quality_report = run_quality_checks(
-            pipeline, stored.config.quality, tables_written=list(row_counts.keys())
-        )
+        # Filesystem (CSV/Parquet files) — SQL quality checks don't apply reliably
+        if dest.connector == "filesystem":
+            quality_report = QualityReport()
+        else:
+            quality_report = run_quality_checks(
+                pipeline, stored.config.quality, tables_written=list(row_counts.keys())
+            )
     else:
         quality_report = QualityReport()
 
@@ -197,20 +210,6 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
         quality_report=quality_report,
         duration_seconds=round(duration, 3),
     )
-
-
-def _get_row_counts(pipeline: dlt.Pipeline) -> dict[str, int]:
-    user_tables = [
-        table_name
-        for table_name in pipeline.default_schema.tables.keys()
-        if not table_name.startswith("_dlt")
-    ]
-    counts: dict[str, int] = {}
-    with pipeline.sql_client() as client:
-        for table_name in user_tables:
-            result = client.execute_sql(f'SELECT COUNT(*) FROM "{table_name}"')
-            counts[table_name] = result[0][0]
-    return counts
 
 
 def _load_stored(name: str, store: ControlStore | None = None):
@@ -359,6 +358,11 @@ def get_preview_rows(
             "error": "Pipeline hozir ishlayapti. Preview uchun tugashini kuting.",
         }
     _, stored = _load_stored(name, store)
+    if stored.config.destination.connector == "filesystem":
+        return {
+            "tables": {},
+            "error": "Fayl (CSV/Parquet) destination uchun SQL preview yo'q — fayllarni papkadan oching.",
+        }
     pipeline = build_dlt_pipeline(stored.config)
     limit = max(1, min(int(limit), 100))
     dataset = stored.config.destination.dataset_name or "raw"
