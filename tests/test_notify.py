@@ -8,16 +8,50 @@ from uzpipe.core.config import DestinationConfig, NotifyConfig, PipelineConfig
 from uzpipe.core.notify import format_run_message, maybe_notify_run, send_telegram
 
 
-def test_format_run_message_includes_name() -> None:
+def test_format_run_message_success_clear() -> None:
     text = format_run_message(
-        pipeline_name="demo",
+        pipeline_name="rest_test",
         success=True,
         quality_passed=True,
-        row_counts={"events": 10},
-        duration_seconds=1.5,
+        row_counts={"posts": 100, "users": 30},
+        duration_seconds=2.7,
     )
-    assert "demo" in text
-    assert "events=10" in text
+    assert "rest_test" in text
+    assert "Chumoli" in text
+    assert "Muvaffaqiyatli" in text
+    assert "130" in text  # total
+    assert "posts" in text and "100" in text
+    assert "users" in text and "30" in text
+    assert "2.7" in text
+    assert "✅" in text
+
+
+def test_format_run_message_fail() -> None:
+    text = format_run_message(
+        pipeline_name="broken",
+        success=False,
+        quality_passed=False,
+        row_counts={},
+        error="connection refused",
+        duration_seconds=0.4,
+    )
+    assert "❌" in text
+    assert "Xato" in text
+    assert "connection refused" in text
+    assert "400 ms" in text or "0.4" in text
+
+
+def test_format_run_message_quality() -> None:
+    text = format_run_message(
+        pipeline_name="q",
+        success=True,
+        quality_passed=False,
+        row_counts={"t": 5},
+        quality_details=[{"passed": False, "detail": "nulls > 10%"}],
+    )
+    assert "⚠️" in text
+    assert "Quality" in text
+    assert "nulls" in text
 
 
 def test_send_telegram_request_shape() -> None:
@@ -31,6 +65,7 @@ def test_send_telegram_request_shape() -> None:
         assert args[0] == "https://api.telegram.org/botTOKEN/sendMessage"
         assert kwargs["json"]["chat_id"] == "123"
         assert kwargs["json"]["text"] == "hello"
+        assert kwargs["json"]["parse_mode"] == "HTML"
 
 
 def test_notify_exception_swallowed() -> None:
