@@ -355,6 +355,7 @@ def health() -> dict[str, object]:
         "version": "0.1.0",
         "scheduler_running": sched.get("running", False),
         "scheduler_jobs": sched.get("job_count", 0),
+        "run_queue": sched.get("run_queue", {}),
         "runs": _runs().stats(),
     }
 
@@ -574,7 +575,7 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
         _store().save(config, secrets, manifest)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
-    if config.schedule.kind.value == "interval":
+    if config.schedule.kind.value in ("interval", "daily_at"):
         try:
             reload_jobs()
         except Exception:

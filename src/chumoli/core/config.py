@@ -17,19 +17,43 @@ class WriteDisposition(str, Enum):
 class ScheduleKind(str, Enum):
     MANUAL = "manual"
     INTERVAL = "interval"
+    DAILY_AT = "daily_at"
+    # Legacy — built-in scheduler does not integrate Airflow
     AIRFLOW = "airflow"
 
 
 class ScheduleConfig(BaseModel):
     kind: ScheduleKind = ScheduleKind.MANUAL
     interval_minutes: int | None = Field(default=None)
+    daily_at_time: str | None = Field(
+        default=None, description='Har kuni soat, masalan "10:00"'
+    )
+    timezone: str = Field(default="Asia/Tashkent")
 
-    @field_validator("interval_minutes")
+    @field_validator("daily_at_time")
     @classmethod
-    def _require_interval_when_needed(cls, v: int | None, info: Any) -> int | None:
-        if info.data.get("kind") == ScheduleKind.INTERVAL and not v:
-            raise ValueError("kind=INTERVAL uchun interval_minutes majburiy")
-        return v
+    def _normalize_daily_at_time(cls, v: str | None) -> str | None:
+        if v is None or str(v).strip() == "":
+            return None
+        s = str(v).strip()
+        parts = s.split(":")
+        if len(parts) != 2:
+            raise ValueError("daily_at_time formati HH:MM bo'lishi kerak")
+        try:
+            h, m = int(parts[0]), int(parts[1])
+        except ValueError as e:
+            raise ValueError("daily_at_time formati HH:MM bo'lishi kerak") from e
+        if not (0 <= h <= 23 and 0 <= m <= 59):
+            raise ValueError("daily_at_time: soat 0-23, daqiqa 0-59")
+        return f"{h:02d}:{m:02d}"
+
+    @model_validator(mode="after")
+    def _schedule_fields_required(self) -> "ScheduleConfig":
+        if self.kind == ScheduleKind.INTERVAL and not self.interval_minutes:
+            raise ValueError("kind=interval uchun interval_minutes majburiy")
+        if self.kind == ScheduleKind.DAILY_AT and not self.daily_at_time:
+            raise ValueError('kind=daily_at uchun daily_at_time majburiy (masalan "10:00")')
+        return self
 
 
 class DestinationConfig(BaseModel):

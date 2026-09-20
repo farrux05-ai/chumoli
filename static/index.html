@@ -1075,6 +1075,8 @@ async function startEdit(name){
     const sch=cfg.schedule||{};
     draft['f-sched-kind']=sch.kind||'manual';
     draft['f-sched-min']=sch.interval_minutes!=null?String(sch.interval_minutes):'60';
+    draft['f-sched-time']=sch.daily_at_time||'10:00';
+    draft['f-sched-tz']=sch.timezone||'Asia/Tashkent';
     const q=cfg.quality||{};
     draft['f-q-min']=q.row_count_min!=null?String(q.row_count_min):'';
     draft['f-q-nn']=(q.not_null_columns||[]).join(', ');
@@ -1362,12 +1364,18 @@ function renderStepDestAndSave(body,foot){
       <label>Jadval</label>
       <select id="f-sched-kind">
         <option value="manual" ${schedKindVal==='manual'?'selected':''}>Qo'lda — faqat tugma bilan</option>
-        <option value="interval" ${schedKindVal==='interval'?'selected':''}>Avtomatik — interval bo'yicha</option>
+        <option value="interval" ${schedKindVal==='interval'?'selected':''}>Avtomatik — har N daqiqa</option>
+        <option value="daily_at" ${schedKindVal==='daily_at'?'selected':''}>Har kuni soat (masalan 10:00)</option>
       </select>
     </div>
     <div class="field" id="sched-interval-wrap" style="display:none">
       <label>Interval (daqiqa)</label>
       <input id="f-sched-min" type="number" min="1" value="${esc(dv('f-sched-min','60'))}"/>
+    </div>
+    <div class="field" id="sched-daily-wrap" style="display:none">
+      <label>Har kuni soat</label>
+      <input id="f-sched-time" type="time" value="${esc(dv('f-sched-time','10:00'))}"/>
+      <div class="field-hint">Toshkent vaqti (Asia/Tashkent). Bir vaqtda ko'p pipeline bo'lsa navbat bilan ishlaydi.</div>
     </div>
 
     <details style="margin-bottom:14px">
@@ -1444,7 +1452,7 @@ function renderStepDestAndSave(body,foot){
   if(destMode){ destMode.onchange=syncDestMode; syncDestMode(); }
 
   const sk=document.getElementById('f-sched-kind');
-  const syncSched=()=>{ document.getElementById('sched-interval-wrap').style.display=sk?.value==='interval'?'block':'none'; };
+  const syncSched=()=>{ const k=sk?.value||'manual'; document.getElementById('sched-interval-wrap').style.display=k==='interval'?'block':'none'; const dw=document.getElementById('sched-daily-wrap'); if(dw) dw.style.display=k==='daily_at'?'block':'none'; };
   if(sk){ sk.onchange=syncSched; syncSched(); }
 
   const wd=document.getElementById('f-wd');
@@ -1534,7 +1542,13 @@ async function savePipeline(){
   const primary_key=pkRaw?pkRaw.split(',').map(s=>s.trim()).filter(Boolean):[];
   const schedKind=(document.getElementById('f-sched-kind')||{}).value||'manual';
   const schedMin=parseInt((document.getElementById('f-sched-min')||{}).value||'60',10);
-  const schedule={kind:schedKind,interval_minutes:schedKind==='interval'&&!isNaN(schedMin)?schedMin:null};
+  const schedTime=((document.getElementById('f-sched-time')||{}).value||'10:00').trim();
+  const schedule={
+    kind:schedKind,
+    interval_minutes:schedKind==='interval'&&!isNaN(schedMin)?schedMin:null,
+    daily_at_time:schedKind==='daily_at'?schedTime:null,
+    timezone:'Asia/Tashkent'
+  };
   const qMin=(document.getElementById('f-q-min')||{}).value||'';
   const qNn=((document.getElementById('f-q-nn')||{}).value||'').trim();
   const qDup=((document.getElementById('f-q-dup')||{}).value||'').trim();

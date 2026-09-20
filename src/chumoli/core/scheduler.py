@@ -1,25 +1,26 @@
 """
 chumoli.core.scheduler
-=======================
+======================
 
-APScheduler asosidagi built-in interval scheduler.
+Built-in APScheduler: interval + daily_at.
 
-Faqat ScheduleKind.INTERVAL pipeline'larni ishga tushiradi.
-MANUAL — faqat dashboard/CLI; AIRFLOW — tashqi tizim.
+Ishlash modeli:
+  trigger (interval/cron) → RunQueue.enqueue → max N parallel worker
+
+To'g'ridan-to'g'ri run_pipeline_by_name chaqirilmaydi — ertalab
+ko'p job birga o'qsa ham process qulamasin.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
-from datetime import UTC, datetime
 from typing import Any
 
 from chumoli.connectors import register_builtin_connectors
 from chumoli.core.config import ScheduleKind
-from chumoli.core.pipeline_runner import run_pipeline_by_name
+from chumoli.core.run_queue import get_run_queue
 from chumoli.store.control_store import ControlStore
-from chumoli.store.run_store import RunStore
 
 log = logging.getLogger("chumoli.scheduler")
 
@@ -27,49 +28,21 @@ _lock = threading.RLock()
 _scheduler: Any = None
 _started = False
 
+DEFAULT_TZ = "Asia/Tashkent"
+
 
 def _job_id(name: str) -> str:
     return f"pipeline:{name}"
 
 
-def _run_job(name: str) -> None:
-    register_builtin_connectors()
-    store = ControlStore()
-    runs = RunStore()
-    started = datetime.now(UTC)
-    try:
-        result = run_pipeline_by_name(name, store=store)
-        details = [
-            {"passed": o.passed, "detail": o.detail}
-            for o in result.quality_report.outcomes
-        ]
-        runs.record(
-            pipeline_name=name,
-            success=result.success,
-            quality_passed=result.quality_report.all_passed,
-            row_counts=result.row_counts,
-            quality_details=details,
-            started_at=started,
-            finished_at=datetime.now(UTC),
-            trigger="schedule",
-        )
-        log.info(
-            "scheduled_run_ok name=%s rows=%s quality=%s",
-            name,
-            result.row_counts,
-            result.quality_report.all_passed,
-        )
-    except Exception as e:
-        runs.record(
-            pipeline_name=name,
-            success=False,
-            quality_passed=False,
-            error=str(e),
-            started_at=started,
-            finished_at=datetime.now(UTC),
-            trigger="schedule",
-        )
-        log.exception("scheduled_run_failed name=%s", name)
+def _enqueue_job(name: str) -> None:
+    """APScheduler callback — faqat navbatga qo'yadi."""
+    get_run_queue().enqueue(name, trigger="schedule")
+
+
+def _parse_hhmm(value: str) -> tuple[int, int]:
+    parts = value.strip().split(":")
+    return int(parts[0]), int(parts[1])
 
 
 def start_scheduler() -> dict[str, Any]:
@@ -80,21 +53,28 @@ def start_scheduler() -> dict[str, Any]:
             return status()
 
         from apscheduler.schedulers.background import BackgroundScheduler
+        from apscheduler.triggers.cron import CronTrigger
         from apscheduler.triggers.interval import IntervalTrigger
 
+        # Scheduler UTC; daily_at job'lar o'z timezone'ida
         scheduler = BackgroundScheduler(timezone="UTC")
         register_builtin_connectors()
         store = ControlStore()
+        # Ensure queue executor is wired
+        get_run_queue()
 
         for item in store.list_all():
             cfg = item.get("config") or {}
             sched = cfg.get("schedule") or {}
             kind = sched.get("kind") or "manual"
-            minutes = sched.get("interval_minutes")
             name = item["name"]
-            if kind == ScheduleKind.INTERVAL.value and minutes:
+
+            if kind == ScheduleKind.INTERVAL.value:
+                minutes = sched.get("interval_minutes")
+                if not minutes:
+                    continue
                 scheduler.add_job(
-                    _run_job,
+                    _enqueue_job,
                     trigger=IntervalTrigger(minutes=int(minutes)),
                     id=_job_id(name),
                     args=[name],
@@ -102,7 +82,37 @@ def start_scheduler() -> dict[str, Any]:
                     max_instances=1,
                     coalesce=True,
                 )
-                log.info("scheduled name=%s every=%sm", name, minutes)
+                log.info("scheduled interval name=%s every=%sm", name, minutes)
+
+            elif kind == ScheduleKind.DAILY_AT.value:
+                raw_time = sched.get("daily_at_time") or ""
+                try:
+                    hour, minute = _parse_hhmm(raw_time)
+                except Exception:
+                    log.warning("skip daily_at bad time name=%s time=%r", name, raw_time)
+                    continue
+                tz = (sched.get("timezone") or DEFAULT_TZ).strip() or DEFAULT_TZ
+                try:
+                    trigger = CronTrigger(hour=hour, minute=minute, timezone=tz)
+                except Exception:
+                    log.exception("skip daily_at bad tz name=%s tz=%r", name, tz)
+                    continue
+                scheduler.add_job(
+                    _enqueue_job,
+                    trigger=trigger,
+                    id=_job_id(name),
+                    args=[name],
+                    replace_existing=True,
+                    max_instances=1,
+                    coalesce=True,
+                )
+                log.info(
+                    "scheduled daily_at name=%s time=%02d:%02d tz=%s",
+                    name,
+                    hour,
+                    minute,
+                    tz,
+                )
 
         scheduler.start()
         _scheduler = scheduler
@@ -143,4 +153,13 @@ def status() -> dict[str, Any]:
                         ),
                     }
                 )
-    return {"running": running, "jobs": jobs, "job_count": len(jobs)}
+    out: dict[str, Any] = {
+        "running": running,
+        "jobs": jobs,
+        "job_count": len(jobs),
+    }
+    try:
+        out["run_queue"] = get_run_queue().status()
+    except Exception:
+        out["run_queue"] = {}
+    return out
