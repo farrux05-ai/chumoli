@@ -30,7 +30,7 @@ def send_telegram(
     }
     if parse_mode:
         payload["parse_mode"] = parse_mode
-    with httpx.Client(timeout=15.0) as client:
+    with httpx.Client(timeout=5.0) as client:
         resp = client.post(url, json=payload)
         resp.raise_for_status()
 

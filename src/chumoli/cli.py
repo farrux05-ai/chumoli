@@ -164,11 +164,13 @@ def ui(
         threading.Thread(target=_open, daemon=True).start()
 
     try:
+        # workers must stay 1: in-memory scheduler, run locks, job map are process-local
         uvicorn.run(
             "chumoli.api.app:app",
             host=host,
             port=port,
             log_level="info",
+            workers=1,
         )
     except KeyboardInterrupt:
         console.print("\n[dim]Chumoli to'xtatildi.[/dim]")

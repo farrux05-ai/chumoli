@@ -103,6 +103,11 @@ chumoli ui
 
 ---
 
+## Production notes
+
+- Run **one** uvicorn worker only (`chumoli ui` already uses `workers=1`). Multiple workers break the in-process scheduler and run locks.
+- Back up `CHUMOLI_HOME/master.key` together with the control DB — without the key, secrets cannot be decrypted.
+
 ## CLI
 
 ```bash

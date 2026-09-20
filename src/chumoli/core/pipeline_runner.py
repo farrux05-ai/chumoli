@@ -162,12 +162,15 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
     # Filesystem: explicit loader format (csv default for local-friendly exports)
     dest = stored.config.destination
     if dest.connector == "filesystem":
+        import os
+
         fmt = dest.file_format or "csv"
         run_kwargs["loader_file_format"] = fmt
-        # CSV: uncompressed so Excel opens without gunzip
+        # CSV: uncompressed for Excel; other formats must not inherit this process env
         if fmt == "csv":
-            import os
-            os.environ.setdefault("NORMALIZE__DATA_WRITER__DISABLE_COMPRESSION", "true")
+            os.environ["NORMALIZE__DATA_WRITER__DISABLE_COMPRESSION"] = "true"
+        else:
+            os.environ.pop("NORMALIZE__DATA_WRITER__DISABLE_COMPRESSION", None)
 
     load_info = pipeline.run(source, **run_kwargs)
     duration = perf_counter() - t0
@@ -348,6 +351,13 @@ def get_preview_rows(
     name: str, store: ControlStore | None = None, limit: int = 10
 ) -> dict[str, Any]:
     """First N rows per loaded table (UI preview). Max 3 tables."""
+    # DuckDB (and many warehouses) reject concurrent writers — never open
+    # a second connection while this pipeline is still loading.
+    if name in get_running_pipelines():
+        return {
+            "tables": {},
+            "error": "Pipeline hozir ishlayapti. Preview uchun tugashini kuting.",
+        }
     _, stored = _load_stored(name, store)
     pipeline = build_dlt_pipeline(stored.config)
     limit = max(1, min(int(limit), 100))

@@ -135,7 +135,20 @@ class ControlStore:
 
         config = PipelineConfig.model_validate(json.loads(row["config_json"]))
         encrypted_secrets: dict[str, str] = json.loads(row["secrets_json"])
-        secrets = self._cipher.decrypt_dict(encrypted_secrets)
+        try:
+            secrets = self._cipher.decrypt_dict(encrypted_secrets)
+        except Exception as e:
+            # InvalidToken and similar — never return opaque 500
+            from cryptography.fernet import InvalidToken
+
+            key_hint = str(getattr(self._cipher, "_key_path", "~/.chumoli/master.key"))
+            if isinstance(e, InvalidToken) or e.__class__.__name__ == "InvalidToken":
+                raise ValueError(
+                    f"'{name}' pipeline credentials o'qib bo'lmadi. "
+                    f"master.key noto'g'ri yoki yo'qolgan. Fayl: {key_hint}. "
+                    "Eski serverdan master.key ni ham ko'chiring yoki pipeline secrets ni qayta kiriting."
+                ) from e
+            raise
         dest_conn = secrets.get(DEST_CONNECTION_SECRET_KEY)
         if dest_conn:
             config.destination.connection = dest_conn
