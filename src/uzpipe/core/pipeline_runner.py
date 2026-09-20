@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
@@ -15,6 +17,15 @@ from uzpipe.core.quality import QualityReport, run_quality_checks
 from uzpipe.store.control_store import ControlStore, StoredPipeline
 
 log = logging.getLogger("uzpipe.pipeline_runner")
+
+# Parallel run guard: same pipeline_name + concurrent dlt.run → LoadPackageNotFound
+# (dlt working dir shared). One in-process run per name at a time.
+_RUNNING_PIPELINES: dict[str, dict[str, Any]] = {}
+_RUNNING_LOCK = threading.Lock()
+
+
+class PipelineAlreadyRunning(RuntimeError):
+    """Same pipeline is already executing in this process."""
 
 
 @dataclass
@@ -58,14 +69,46 @@ def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
     )
 
 
+def get_running_pipelines() -> dict[str, dict[str, Any]]:
+    """Currently executing pipelines and coarse progress (for UI polling)."""
+    with _RUNNING_LOCK:
+        return {k: dict(v) for k, v in _RUNNING_PIPELINES.items()}
+
+
+def _set_run_step(name: str, step: str, **extra: Any) -> None:
+    with _RUNNING_LOCK:
+        info = _RUNNING_PIPELINES.get(name)
+        if info is None:
+            return
+        info["step"] = step
+        info.update(extra)
+
+
 def run_pipeline_by_name(name: str, store: ControlStore | None = None) -> RunResult:
     store = store or ControlStore()
     stored = store.load(name)
     if stored is None:
         raise KeyError(f"Pipeline '{name}' topilmadi")
 
-    connector = registry.get(stored.config.connector_key)
-    result = _execute(stored, connector)
+    with _RUNNING_LOCK:
+        if name in _RUNNING_PIPELINES:
+            raise PipelineAlreadyRunning(
+                f"Pipeline '{name}' hozir ishga tushgan. "
+                "Tugaguncha kuting — parallel run dlt holatini buzadi."
+            )
+        _RUNNING_PIPELINES[name] = {
+            "started_at": time.time(),
+            "step": "starting",
+            "rows_so_far": 0,
+        }
+
+    try:
+        connector = registry.get(stored.config.connector_key)
+        result = _execute(stored, connector)
+    finally:
+        with _RUNNING_LOCK:
+            _RUNNING_PIPELINES.pop(name, None)
+
     try:
         from uzpipe.core.notify import maybe_notify_run
 
@@ -88,10 +131,13 @@ def run_pipeline_by_name(name: str, store: ControlStore | None = None) -> RunRes
 
 
 def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
+    name = stored.config.name
+    _set_run_step(name, "extract")
     source = connector.build_dlt_source(stored.config.source_params, stored.secrets)
     pipeline = build_dlt_pipeline(stored.config)
 
     t0 = perf_counter()
+    _set_run_step(name, "run")
     load_info = pipeline.run(
         source,
         write_disposition=stored.config.write_disposition.value,
@@ -100,15 +146,20 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
     duration = perf_counter() - t0
 
     load_succeeded = not load_info.has_failed_jobs
+    _set_run_step(name, "count" if load_succeeded else "failed")
     row_counts = _get_row_counts(pipeline) if load_succeeded else {}
+    if row_counts:
+        _set_run_step(name, "count", rows_so_far=sum(row_counts.values()))
 
     if load_succeeded:
+        _set_run_step(name, "quality")
         quality_report = run_quality_checks(
             pipeline, stored.config.quality, tables_written=list(row_counts.keys())
         )
     else:
         quality_report = QualityReport()
 
+    _set_run_step(name, "done", rows_so_far=sum(row_counts.values()))
     return RunResult(
         pipeline_name=stored.config.name,
         load_info=load_info,
@@ -264,6 +315,38 @@ def sync_from_destination(name: str, store: ControlStore | None = None) -> dict[
         return {"status": "ok", "detail": "Destination bilan sinxronlashtirildi"}
     except Exception as e:
         return {"status": "error", "detail": f"Sinxronlash xatosi: {e}"}
+
+
+def get_preview_rows(
+    name: str, store: ControlStore | None = None, limit: int = 10
+) -> dict[str, Any]:
+    """First N rows per loaded table (UI preview). Max 3 tables."""
+    _, stored = _load_stored(name, store)
+    pipeline = build_dlt_pipeline(stored.config)
+    limit = max(1, min(int(limit), 100))
+    try:
+        user_tables = [
+            t
+            for t in pipeline.default_schema.tables.keys()
+            if not t.startswith("_dlt")
+        ]
+        if not user_tables:
+            return {"tables": {}, "error": "Hali hech qanday jadval yuklanmagan"}
+
+        result: dict[str, Any] = {}
+        with pipeline.sql_client() as client:
+            for table_name in user_tables[:3]:
+                try:
+                    rows = client.execute_sql(
+                        f'SELECT * FROM "{table_name}" LIMIT {limit}'
+                    )
+                    row_lists = [list(r) for r in (rows or [])]
+                    result[table_name] = {"columns": [], "rows": row_lists}
+                except Exception as e:
+                    result[table_name] = {"error": str(e), "columns": [], "rows": []}
+        return {"tables": result}
+    except Exception as e:
+        return {"tables": {}, "error": str(e)}
 
 
 def drop_resource(name: str, resource: str, store: ControlStore | None = None) -> dict[str, str]:

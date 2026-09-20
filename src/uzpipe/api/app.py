@@ -31,9 +31,12 @@ from uzpipe.core.destinations import (
     get_destination,
 )
 from uzpipe.core.pipeline_runner import (
+    PipelineAlreadyRunning,
     drop_pending_packages,
     drop_resource,
     get_failed_jobs,
+    get_preview_rows,
+    get_running_pipelines,
     run_pipeline_by_name,
     sync_from_destination,
 )
@@ -203,6 +206,10 @@ def _execute_run_job(job_id: str, name: str) -> None:
             total_rows=result.total_rows,
             rows_per_second=round(result.rows_per_second, 1),
         ).model_dump(mode="json")
+    except PipelineAlreadyRunning as e:
+        log.warning("pipeline_already_running pipeline=%s job=%s", name, job_id)
+        job["status"] = "error"
+        job["error"] = str(e)
     except Exception as e:
         log.exception("run_job_failed pipeline=%s job=%s", name, job_id)
         job["status"] = "error"
@@ -218,9 +225,19 @@ def _execute_run_job(job_id: str, name: str) -> None:
 
 @app.post("/api/pipelines/{name}/run/async", dependencies=[Depends(require_api_key)])
 def run_pipeline_async(name: str, background_tasks: BackgroundTasks) -> dict[str, str]:
-    """Fon rejimida ishga tushiradi, darhol run_id qaytaradi (bloklamaydi)."""
+    """Fon rejimida ishga tushiradi, darhol run_id qaytaradi (bloklamaydi).
+
+    Katta dataset uchun: client poll qiladi; server bloklanmaydi.
+    Parallel ikkinchi run → 409 (LoadPackageNotFound oldini olish).
+    """
     if _store().load(name) is None:
         raise HTTPException(404, f"Pipeline '{name}' topilmadi")
+    running = get_running_pipelines()
+    if name in running:
+        raise HTTPException(
+            409,
+            f"Pipeline '{name}' hozir ishga tushgan. Tugaguncha kuting.",
+        )
     job_id = uuid.uuid4().hex
     _RUN_JOBS[job_id] = {
         "status": "queued",
@@ -239,7 +256,74 @@ def run_job_status(run_id: str) -> dict[str, Any]:
     job = _RUN_JOBS.get(run_id)
     if job is None:
         raise HTTPException(404, f"Job '{run_id}' topilmadi")
-    return job
+    out = dict(job)
+    # Attach live step if pipeline still running (long extracts)
+    pname = job.get("pipeline_name")
+    if pname and job.get("status") in ("queued", "running"):
+        live = get_running_pipelines().get(pname)
+        if live:
+            out["step"] = live.get("step")
+            out["rows_so_far"] = live.get("rows_so_far", 0)
+            started = live.get("started_at") or job.get("started_at")
+            if started:
+                out["elapsed_seconds"] = round(time.time() - float(started), 1)
+    return out
+
+
+@app.get("/api/pipelines/running", dependencies=[Depends(require_api_key)])
+def list_running_pipelines() -> dict[str, Any]:
+    """Hozir ishlayotgan pipeline'lar (katta dataset / timeout diagnostikasi)."""
+    running = get_running_pipelines()
+    now = time.time()
+    enriched = {}
+    for name, info in running.items():
+        started = float(info.get("started_at") or now)
+        enriched[name] = {
+            **info,
+            "elapsed_seconds": round(now - started, 1),
+        }
+    return {"running": enriched}
+
+
+@app.get("/api/pipelines/{name}/status", dependencies=[Depends(require_api_key)])
+def pipeline_status(name: str) -> dict[str, Any]:
+    """Pipeline ishlayaptimi va qaysi bosqichda."""
+    if _store().load(name) is None:
+        raise HTTPException(404, f"Pipeline '{name}' topilmadi")
+    running = get_running_pipelines()
+    if name in running:
+        info = running[name]
+        started = float(info.get("started_at") or time.time())
+        return {
+            "name": name,
+            "running": True,
+            "step": info.get("step", "run"),
+            "elapsed_seconds": round(time.time() - started, 1),
+            "rows_so_far": info.get("rows_so_far", 0),
+        }
+    recent = _runs().list_recent(limit=1, pipeline_name=name)
+    last = recent[0] if recent else None
+    return {
+        "name": name,
+        "running": False,
+        "step": None,
+        "elapsed_seconds": 0,
+        "rows_so_far": 0,
+        "last_run": last,
+    }
+
+
+@app.get("/api/pipelines/{name}/preview", dependencies=[Depends(require_api_key)])
+def preview_pipeline_data(name: str, limit: int = 10) -> dict[str, Any]:
+    """Yuklangan jadvaldan birinchi N qator."""
+    if _store().load(name) is None:
+        raise HTTPException(404, f"Pipeline '{name}' topilmadi")
+    try:
+        return get_preview_rows(name, store=_store(), limit=limit)
+    except KeyError as e:
+        raise HTTPException(404, str(e)) from e
+    except Exception as e:
+        raise HTTPException(500, f"Preview xatosi: {e}") from e
 
 
 @app.get("/")
@@ -499,6 +583,8 @@ def run_pipeline(name: str) -> RunResponse:
         result = run_pipeline_by_name(name, store=_store())
     except KeyError as e:
         raise HTTPException(404, str(e)) from e
+    except PipelineAlreadyRunning as e:
+        raise HTTPException(409, str(e)) from e
     except Exception as e:
         raise HTTPException(500, f"Run xatosi: {e}") from e
 
