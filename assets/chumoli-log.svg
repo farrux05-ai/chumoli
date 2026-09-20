@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Fon (Sariq-to'q sariq kvadrat) -->
+  <rect width="100" height="100" rx="22" fill="#d97706"/>
+  
+  <!-- Antennalar va Oyoqlar -->
+  <g fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Antennalar -->
+    <path d="M 44 32 Q 36 20 28 22"/>
+    <path d="M 56 32 Q 64 20 72 22"/>
+    
+    <!-- Old oyoqlar -->
+    <path d="M 44 48 Q 28 42 22 52"/>
+    <path d="M 56 48 Q 72 42 78 52"/>
+    
+    <!-- O'rta oyoqlar -->
+    <path d="M 44 54 Q 26 56 20 68"/>
+    <path d="M 56 54 Q 74 56 80 68"/>
+    
+    <!-- Orqa oyoqlar -->
+    <path d="M 44 60 Q 30 72 26 82"/>
+    <path d="M 56 60 Q 70 72 74 82"/>
+  </g>
+  
+  <!-- Chumoli tanasi (Boshi, ko'krak va qorin qismi) -->
+  <g fill="#ffffff">
+    <!-- Boshi -->
+    <circle cx="50" cy="34" r="8"/>
+    <!-- Ko'krak (Thorax) -->
+    <ellipse cx="50" cy="52" rx="6" ry="9"/>
+    <!-- Qorin (Abdomen) -->
+    <ellipse cx="50" cy="73" rx="11" ry="14"/>
+  </g>
+</svg>

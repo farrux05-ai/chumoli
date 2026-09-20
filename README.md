@@ -1,8 +1,23 @@
-# UzPipe
+<p align="center">
+  <img src="assets/chumoli-logo.svg" alt="Chumoli Logo" width="120" height="120" />
+</p>
 
-Lightweight EL tool for Uzbekistan data sources, built on [dlt](https://dlthub.com) (Apache 2.0).
+<h1 align="center">Chumoli</h1>
 
-Dashboard + FastAPI + connectors (SQL, REST, Click, Payme, Uzum) + volume demo.
+<p align="center">
+  <strong>Lightweight EL Tool for Uzbekistan Data Sources</strong><br>
+  Built on top of <a href="https://dlthub.com">dlt engine</a> (Apache 2.0)
+</p>
+
+<p align="center">
+  <a href="#option-a--docker-recommended">Docker Quickstart</a> •
+  <a href="#option-b--local-python">Local Setup</a> •
+  <a href="#features-v1">Features</a>
+</p>
+
+---
+
+Dashboard + FastAPI + Connectors (SQL, REST, Click, Payme, Uzum Market, Didox) + Volume Demo.
 
 ---
 
@@ -11,14 +26,14 @@ Dashboard + FastAPI + connectors (SQL, REST, Click, Payme, Uzum) + volume demo.
 **Requirements:** Docker + Docker Compose v2
 
 ```bash
-git clone https://github.com/farrux05-ai/uzpipe.git
-cd uzpipe
+git clone https://github.com/farrux05-ai/chumoli.git
+cd chumoli
 docker compose up --build
 ```
 
 Open **http://localhost:8000/**
 
-- Data (pipelines, secrets, run history) → Docker volume `uzpipe_data`
+- Data (pipelines, secrets, run history) → Docker volume `chumoli_data`
 - Stop: `Ctrl+C` or `docker compose down`
 - Logs: `docker compose logs -f`
 
@@ -39,8 +54,8 @@ Response includes `total_rows`, `duration_seconds`, `rows_per_second`.
 **Requirements:** Python 3.11+
 
 ```bash
-git clone https://github.com/farrux05-ai/uzpipe.git
-cd uzpipe
+git clone https://github.com/farrux05-ai/chumoli.git
+cd chumoli
 
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
@@ -55,7 +70,7 @@ uzpipe-api
 
 Open **http://127.0.0.1:8000/**
 
-Data dir: `~/.uzpipe` (override with `UZPIPE_HOME=/path`).
+Data dir: `~/.chumoli` (override with `CHUMOLI_HOME=/path`).
 
 ### Tests
 
@@ -71,12 +86,16 @@ pytest -q
 | Area | Status |
 |------|--------|
 | PostgreSQL / MySQL / SQL / REST | ✅ |
-| Click / Payme / Uzum Market | ✅ |
-| Volume demo (synthetic) | ✅ |
+| Click / Payme / Uzum Market / Didox | ✅ |
+| Volume demo (synthetic benchmark) | ✅ |
 | DuckDB / Postgres / FS / ClickHouse destinations | ✅ |
 | Run monitor + duration / rows/s | ✅ |
 | Interval scheduler | ✅ |
 | Encrypted secrets | ✅ |
-| Docker | ✅ |
+| Docker support | ✅ |
 
-License: Apache-2.0
+---
+
+## License
+
+Apache-2.0
