@@ -1483,7 +1483,7 @@ async function runSqlInspect(){
 async function savePipeline(){
   captureDraft();
   const m=connectors.find(x=>x.key===selectedConnector);
-  const name=(dv('f-name','')||'').toString().trim()||((document.getElementById('f-name')||{}).value||'').trim();
+  const name=(editingName||dv('f-name','')||(document.getElementById('f-name')||{}).value||'').toString().trim();
   if(!name){ toast('Nom majburiy','err'); return; }
   const source_params={},secrets={};
   for(const f of(m?.fields||[])){
