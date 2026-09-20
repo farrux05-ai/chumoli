@@ -61,7 +61,7 @@ chumoli-api
 
 Open **http://localhost:8000/**
 
-CLI: `chumoli --help`
+CLI: `chumoli ui` (dashboard + brauzer) · `chumoli --help`
 
 ---
 

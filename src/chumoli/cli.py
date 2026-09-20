@@ -33,7 +33,7 @@ from chumoli.store.control_store import ControlStore
 
 app = typer.Typer(
     name="chumoli",
-    help="Zero-friction EL data pipeline tool — O'zbekiston uchun.",
+    help="Chumoli — O'zbekiston manbalari uchun lightweight EL tool.",
     add_completion=False,
 )
 console = Console()
@@ -119,6 +119,60 @@ def list_pipelines() -> None:
     for p in pipelines:
         table.add_row(p["name"], p["connector_key"], p["updated_at"])
     console.print(table)
+
+
+
+@app.command("ui")
+def ui(
+    host: str = typer.Option("127.0.0.1", help="Bind host"),
+    port: int = typer.Option(8000, help="HTTP port"),
+    open_browser: bool = typer.Option(
+        True, "--open/--no-open", help="Brauzerni avtomatik ochish"
+    ),
+) -> None:
+    """Dashboard UI ni ishga tushiradi va brauzerda ochadi.
+
+    Ctrl+C bilan to'xtatiladi.
+    """
+    import threading
+    import time
+    import webbrowser
+
+    import uvicorn
+
+    url = f"http://{host}:{port}/"
+    console.print(f"[bold]Chumoli UI[/bold] → {url}")
+    console.print("To'xtatish: [dim]Ctrl+C[/dim]")
+
+    if open_browser:
+
+        def _open() -> None:
+            # Server tinglashga ulgurishi uchun biroz kutamiz
+            for _ in range(50):
+                try:
+                    import urllib.request
+
+                    urllib.request.urlopen(f"http://{host}:{port}/api/health", timeout=0.3)
+                    break
+                except Exception:
+                    time.sleep(0.1)
+            try:
+                webbrowser.open(url)
+            except Exception:
+                console.print(f"[yellow]Brauzer ochilmadi — qo'lda kiring:[/yellow] {url}")
+
+        threading.Thread(target=_open, daemon=True).start()
+
+    try:
+        uvicorn.run(
+            "chumoli.api.app:app",
+            host=host,
+            port=port,
+            log_level="info",
+        )
+    except KeyboardInterrupt:
+        console.print("\n[dim]Chumoli to'xtatildi.[/dim]")
+
 
 
 def main() -> None:

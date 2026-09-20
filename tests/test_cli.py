@@ -156,3 +156,9 @@ def test_run_exits_nonzero_when_quality_check_fails(monkeypatch, tmp_path) -> No
     # the distinctive word rather than the full phrase verbatim.
     assert "Ogohlantirish" in result.output
     assert "✗" in result.output
+
+
+def test_ui_help() -> None:
+    result = runner.invoke(app, ["ui", "--help"])
+    assert result.exit_code == 0
+    assert "Dashboard" in result.output or "brauzer" in result.output.lower() or "UI" in result.output
