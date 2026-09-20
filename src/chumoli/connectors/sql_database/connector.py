@@ -163,18 +163,26 @@ def _parse_table_cursors(raw: Any) -> dict[str, dict[str, Any]]:
     return {}
 
 
+def _parse_table_write(raw: Any) -> dict[str, dict[str, Any]]:
+    """Parse table_write JSON: {table: {mode, pk}}."""
+    return _parse_table_cursors(raw)  # same shape
+
+
 def _build_sql_database_source(
     params: dict[str, Any], secrets: dict[str, str]
 ) -> Any:
     """Barcha SQL connectorlar uchun yagona dlt chaqiruvi.
 
-    incremental faqat sql_table() darajasida mavjud — sql_database()
-    uni qabul qilmaydi (dlt 1.30).
+    incremental va write_disposition — sql_table() darajasida (har jadval alohida).
 
     Cursor ustuvorligi (har jadval uchun):
       1) table_cursors[table].column
       2) global cursor_column
       3) yo'q → full load
+
+    Yozish usuli (har jadval):
+      table_write[table].mode = replace|append|merge
+      table_write[table].pk   = primary key (merge uchun)
     """
     table_names = [t.strip() for t in str(params.get("table_names") or "").split(",") if t.strip()]
     if not table_names:
@@ -185,13 +193,13 @@ def _build_sql_database_source(
 
     global_initial = parse_cursor_value(params.get("cursor_initial_value"))
     per_table = _parse_table_cursors(params.get("table_cursors"))
+    table_write = _parse_table_write(params.get("table_write"))
     credentials = secrets["connection_string"]
     _preflight_sqlite(credentials)
 
-    # Resolve per-table cursor plan
-    plan: list[tuple[str, str | None, str | None, Any]] = []
-    # (table_ref, schema, table, cursor_col, initial)
-    needs_cursor_check: list[tuple[str, str]] = []  # (table_ref, cursor_col)
+    # Resolve per-table plan: (tref, schema, table, cursor_col, initial, write_mode, pk)
+    plan: list[tuple[Any, ...]] = []
+    needs_cursor_check: list[tuple[str, str]] = []
 
     for tref in table_names:
         schema, table = _parse_table_ref(tref)
@@ -204,49 +212,41 @@ def _build_sql_database_source(
             init_val = parse_cursor_value(init_raw)
         if col:
             needs_cursor_check.append((tref, col))
-        plan.append((tref, schema, table, col, init_val))
+
+        wcfg = table_write.get(tref) or table_write.get(table) or {}
+        mode = (wcfg.get("mode") or wcfg.get("write_disposition") or "").strip() or None
+        pk_raw = wcfg.get("pk") or wcfg.get("primary_key") or ""
+        if isinstance(pk_raw, list):
+            pk_list = [str(x).strip() for x in pk_raw if str(x).strip()]
+        else:
+            pk_list = [x.strip() for x in str(pk_raw).split(",") if x.strip()]
+        plan.append((tref, schema, table, col, init_val, mode, pk_list))
 
     from dlt.sources.sql_database import sql_database, sql_table
 
-    if not any(p[3] for p in plan):
-        # No incremental anywhere — plain sql_database
-        # For schema-qualified names, use per-table sql_table without incremental
-        if any(p[1] for p in plan):
-            import dlt
+    has_cursor = any(p[3] for p in plan)
+    has_schema = any(p[1] for p in plan)
+    has_write = any(p[5] for p in plan)
 
-            @dlt.source(name="sql_database")
-            def _plain_schema_source() -> Any:
-                resources = []
-                for tref, schema, table, _col, _init in plan:
-                    kwargs: dict[str, Any] = {
-                        "credentials": credentials,
-                        "table": table,
-                    }
-                    if schema:
-                        kwargs["schema"] = schema
-                    resources.append(sql_table(**kwargs))
-                return resources
-
-            return _plain_schema_source()
+    # Simple path: no cursor, no schema-qualify, no per-table write → sql_database
+    if not has_cursor and not has_schema and not has_write:
         return sql_database(credentials=credentials, table_names=table_names)
 
-    from chumoli.core.sql_cursor_check import assert_cursor_columns_exist
+    if has_cursor:
+        from chumoli.core.sql_cursor_check import assert_cursor_columns_exist
 
-    # Group by cursor column for validation (same col on multiple tables OK)
-    by_col: dict[str, list[str]] = {}
-    for tref, col in needs_cursor_check:
-        by_col.setdefault(col, []).append(tref)
-    for col, tables in by_col.items():
-        # assert accepts bare or schema.table — pass as-is
-        assert_cursor_columns_exist(credentials, tables, col)
+        by_col: dict[str, list[str]] = {}
+        for tref, col in needs_cursor_check:
+            by_col.setdefault(col, []).append(tref)
+        for col, tables in by_col.items():
+            assert_cursor_columns_exist(credentials, tables, col)
 
     import dlt
-    from dlt.sources.sql_database import sql_table
 
     @dlt.source(name="sql_database")
-    def _incremental_source() -> Any:
+    def _per_table_source() -> Any:
         resources = []
-        for tref, schema, table, col, init_val in plan:
+        for tref, schema, table, col, init_val, mode, pk_list in plan:
             kwargs: dict[str, Any] = {
                 "credentials": credentials,
                 "table": table,
@@ -258,10 +258,14 @@ def _build_sql_database_source(
                 if init_val is not None:
                     inc_kwargs["initial_value"] = init_val
                 kwargs["incremental"] = dlt.sources.incremental(col, **inc_kwargs)
+            if mode:
+                kwargs["write_disposition"] = mode
+            if mode == "merge" and pk_list:
+                kwargs["primary_key"] = pk_list if len(pk_list) > 1 else pk_list[0]
             resources.append(sql_table(**kwargs))
         return resources
 
-    return _incremental_source()
+    return _per_table_source()
 
 
 # ---------------------------------------------------------------------------

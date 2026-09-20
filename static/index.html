@@ -1072,6 +1072,7 @@ async function startEdit(name){
     draft['f-file-format']=dest.file_format||'csv';
     draft['f-wd']=cfg.write_disposition||'replace';
     draft['f-pk']=(cfg.primary_key||[]).join(', ');
+    if(cfg.source_params?.table_write) draft['f-table_write']=typeof cfg.source_params.table_write==='string'?cfg.source_params.table_write:JSON.stringify(cfg.source_params.table_write);
     const sch=cfg.schedule||{};
     draft['f-sched-kind']=sch.kind||'manual';
     draft['f-sched-min']=sch.interval_minutes!=null?String(sch.interval_minutes):'60';
@@ -1453,19 +1454,19 @@ function renderStepDestAndSave(body,foot){
 
   body.innerHTML=stepBarHtml(4,4)+`
     ${savedOpts?`<div class="field">
-      <label>Destination manbai</label>
+      <label>Qayerga yozilsin?</label>
       <select id="f-dest-mode">
         <option value="new" ${dv('f-dest-mode','new')==='new'?'selected':''}>Yangi destination</option>
         <option value="saved" ${dv('f-dest-mode','new')==='saved'?'selected':''}>Saqlangan destination</option>
       </select>
     </div>
     <div id="dest-saved-wrap" style="display:none" class="field">
-      <label>Saqlangan destination</label>
+      <label>Saqlangan joy</label>
       <select id="f-saved-dest"><option value="">— tanlang —</option>${savedOpts}</select>
     </div>`:'<input type="hidden" id="f-dest-mode" value="new"/>'}
     <div id="dest-new-wrap">
       <div class="field">
-        <label>Destination</label>
+        <label>Ma'lumot ombori</label>
         <select id="f-dest">${destOpts}</select>
       </div>
       <div class="field" id="dest-conn-wrap" style="display:none">
@@ -1476,7 +1477,7 @@ function renderStepDestAndSave(body,foot){
       <div class="field">
         <label>Dataset nomi</label>
         <input id="f-dataset" value="${esc(dv('f-dataset','raw'))}"/>
-        <div class="field-hint">dlt schema / papka prefiksi</div>
+        <div class="field-hint">Ichki nom (odatda raw)</div>
       </div>
       <div class="field" id="dest-format-wrap" style="display:none">
         <label>Fayl formati</label>
@@ -1489,22 +1490,63 @@ function renderStepDestAndSave(body,foot){
       </div>
     </div>
 
-    <div class="field">
-      <label>Write disposition</label>
-      <select id="f-wd">
-        <option value="replace" ${wdVal==='replace'?'selected':''}>replace — har safar qayta yozish</option>
-        <option value="append" ${wdVal==='append'?'selected':''}>append — qo'shib borish</option>
-        <option value="merge" ${wdVal==='merge'?'selected':''}>merge — primary key bo'yicha</option>
-      </select>
-    </div>
-    <div class="field" id="pk-wrap" style="display:none">
-      <label>Primary key</label>
-      <input id="f-pk" placeholder="id yoki col1, col2" value="${esc(dv('f-pk',''))}"/>
-      <div class="field-hint">merge uchun, vergul bilan</div>
-    </div>
+    ${(() => {
+      const isSql=isSqlConnector(selectedConnector);
+      const tables=String(dv('f-table_names','')).split(',').map(s=>s.trim()).filter(Boolean);
+      let tw={};
+      try{ tw=JSON.parse(dv('f-table_write','')||'{}')||{}; }catch(e){ tw={}; }
+      if(isSql && tables.length){
+        return `<div class="field">
+          <label>Qanday yozilsin? (har jadval alohida)</label>
+          <div class="field-hint" style="margin-bottom:8px">Har bir jadval uchun alohida usul tanlang</div>
+          <div id="table-write-list" style="display:flex;flex-direction:column;gap:10px">
+            ${tables.map(t=>{
+              const cfg=tw[t]||{};
+              const mode=cfg.mode||wdVal||'replace';
+              const pk=cfg.pk||(mode==='merge'?(dv('f-pk','')||'id'):'');
+              const cols=(inspectedColumns[t]||[]).map(c=>c.name);
+              const pkOpts=cols.length?cols:['id'];
+              return `<div class="sql-row-wrap is-on" data-tw-table="${esc(t)}" style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+                <div style="font-size:13px;font-weight:600;margin-bottom:8px">${esc(t)}</div>
+                <select class="tw-mode" data-table="${esc(t)}" style="width:100%;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:13px;background:var(--bg);margin-bottom:6px">
+                  <option value="replace" ${mode==='replace'?'selected':''}>Qayta yozish — eski o'rniga yangi</option>
+                  <option value="append" ${mode==='append'?'selected':''}>Qo'shib borish — eski qatorlar saqlanadi</option>
+                  <option value="merge" ${mode==='merge'?'selected':''}>Yangilash — kalit bo'yicha (merge)</option>
+                </select>
+                <div class="tw-pk-wrap" style="display:${mode==='merge'?'block':'none'}">
+                  <label style="font-size:12px;color:var(--dim)">Kalit ustun (masalan id)</label>
+                  <select class="tw-pk" data-table="${esc(t)}" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 8px;font-size:12px;background:var(--bg);margin-top:4px">
+                    ${pkOpts.map(c=>`<option value="${esc(c)}" ${pk===c?'selected':''}>${esc(c)}</option>`).join('')}
+                    ${pk && !pkOpts.includes(pk)?`<option value="${esc(pk)}" selected>${esc(pk)}</option>`:''}
+                  </select>
+                  <input class="tw-pk-manual" data-table="${esc(t)}" type="text" placeholder="yoki qo'lda: id, code" value="${esc(pk && !pkOpts.includes(pk)?pk:'')}" style="width:100%;height:30px;margin-top:4px;border:1px solid var(--border);border-radius:6px;padding:0 8px;font-size:12px;background:var(--bg)"/>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+        <input type="hidden" id="f-wd" value="${esc(wdVal)}"/>
+        <input type="hidden" id="f-pk" value="${esc(dv('f-pk',''))}"/>
+        <input type="hidden" id="f-table_write" value="${esc(dv('f-table_write',''))}"/>`;
+      }
+      return `<div class="field">
+        <label>Qanday yozilsin?</label>
+        <select id="f-wd">
+          <option value="replace" ${wdVal==='replace'?'selected':''}>Qayta yozish — eski o'rniga yangi</option>
+          <option value="append" ${wdVal==='append'?'selected':''}>Qo'shib borish — eski qatorlar saqlanadi</option>
+          <option value="merge" ${wdVal==='merge'?'selected':''}>Yangilash — kalit bo'yicha</option>
+        </select>
+        <div class="field-hint">Qayta yozish: har safar tozalab yuklaydi. Qo'shib borish: yangi qatorlar qo'shiladi. Yangilash: bir xil kalit yangilanadi.</div>
+      </div>
+      <div class="field" id="pk-wrap" style="display:none">
+        <label>Kalit ustun</label>
+        <input id="f-pk" placeholder="id" value="${esc(dv('f-pk',''))}"/>
+        <div class="field-hint">Yangilash (merge) uchun majburiy — masalan id</div>
+      </div>`;
+    })()}
 
     <div class="field">
-      <label>Jadval</label>
+      <label>Qachon ishlasin?</label>
       <select id="f-sched-kind">
         <option value="manual" ${schedKindVal==='manual'?'selected':''}>Qo'lda — faqat tugma bilan</option>
         <option value="interval" ${schedKindVal==='interval'?'selected':''}>Avtomatik — har N daqiqa</option>
@@ -1600,8 +1642,52 @@ function renderStepDestAndSave(body,foot){
   if(sk){ sk.onchange=syncSched; syncSched(); }
 
   const wd=document.getElementById('f-wd');
-  const syncWd=()=>{ document.getElementById('pk-wrap').style.display=wd?.value==='merge'?'block':'none'; };
-  if(wd){ wd.onchange=syncWd; syncWd(); }
+  const syncWd=()=>{ const w=document.getElementById('pk-wrap'); if(w) w.style.display=wd?.value==='merge'?'block':'none'; };
+  if(wd && !document.getElementById('table-write-list')){ wd.onchange=syncWd; syncWd(); }
+
+  function collectTableWrite(){
+    const list=document.getElementById('table-write-list');
+    if(!list) return null;
+    const out={};
+    list.querySelectorAll('[data-tw-table]').forEach(row=>{
+      const t=row.getAttribute('data-tw-table');
+      const mode=(row.querySelector('.tw-mode')||{}).value||'replace';
+      let pk='';
+      if(mode==='merge'){
+        const man=(row.querySelector('.tw-pk-manual')||{}).value||'';
+        const sel=(row.querySelector('.tw-pk')||{}).value||'';
+        pk=(man||sel||'id').trim();
+      }
+      out[t]={mode, pk};
+    });
+    const hidden=document.getElementById('f-table_write');
+    if(hidden) hidden.value=JSON.stringify(out);
+    draft['f-table_write']=JSON.stringify(out);
+    // Global fallback = first table mode
+    const first=Object.values(out)[0];
+    if(first){
+      draft['f-wd']=first.mode;
+      const hwd=document.getElementById('f-wd'); if(hwd) hwd.value=first.mode;
+      if(first.mode==='merge'){
+        draft['f-pk']=first.pk||'id';
+        const hpk=document.getElementById('f-pk'); if(hpk) hpk.value=first.pk||'id';
+      }
+    }
+    return out;
+  }
+  document.querySelectorAll('.tw-mode').forEach(el=>{
+    el.addEventListener('change',()=>{
+      const row=el.closest('[data-tw-table]');
+      const wrap=row&&row.querySelector('.tw-pk-wrap');
+      if(wrap) wrap.style.display=el.value==='merge'?'block':'none';
+      collectTableWrite();
+    });
+  });
+  document.querySelectorAll('.tw-pk, .tw-pk-manual').forEach(el=>{
+    el.addEventListener('change', collectTableWrite);
+    el.addEventListener('input', collectTableWrite);
+  });
+  if(document.getElementById('table-write-list')) collectTableWrite();
 }
 
 function fieldHtml(f){
@@ -1674,20 +1760,31 @@ async function savePipeline(){
     }
     if(f.secret) secrets[f.key]=v; else source_params[f.key]=v;
   }
-  // SQL: table_names / table_cursors live only in draft after step 3 (not rendered on step 4)
+  // SQL: table_names / table_cursors / table_write live in draft
   if(isSqlConnector(selectedConnector)){
+    if(typeof collectTableWrite==='function') collectTableWrite();
     if(draft['f-table_names']) source_params.table_names=draft['f-table_names'];
     if(draft['f-table_cursors']) source_params.table_cursors=draft['f-table_cursors'];
+    if(draft['f-table_write']) source_params.table_write=draft['f-table_write'];
     if(!source_params.table_names||!String(source_params.table_names).trim()){
       toast('Kamida bitta jadval tanlang','err'); return;
     }
+    // Validate merge rows have a key
+    try{
+      const tw=JSON.parse(source_params.table_write||'{}')||{};
+      for(const [tn,cfg] of Object.entries(tw)){
+        if(cfg.mode==='merge'&&!(cfg.pk||'').trim()){
+          toast(tn+': Yangilash uchun kalit ustun tanlang (masalan id)','err'); return;
+        }
+      }
+    }catch(e){}
   }
   const destMode=(document.getElementById('f-dest-mode')||{}).value||'new';
   let dest={connector:'duckdb',dataset_name:'raw'};
   let saved_destination_id=null;
   if(destMode==='saved'){
     const sid=(document.getElementById('f-saved-dest')||{}).value;
-    if(!sid){ toast('Saqlangan destination tanlang','err'); return; }
+    if(!sid){ toast('Saqlangan joy tanlang','err'); return; }
     saved_destination_id=sid;
   }else{
     const destKey=document.getElementById('f-dest')?.value||'duckdb';
@@ -1699,7 +1796,20 @@ async function savePipeline(){
       dest.file_format=ff;
     }
   }
-  const pkRaw=((document.getElementById('f-pk')||{}).value||'').trim();
+  let pkRaw=((document.getElementById('f-pk')||{}).value||draft['f-pk']||'').trim();
+  let wdVal=(document.getElementById('f-wd')||{}).value||draft['f-wd']||'replace';
+  // If per-table write has any merge, ensure global pk for validation
+  try{
+    const tw=JSON.parse(draft['f-table_write']||'{}')||{};
+    const modes=Object.values(tw);
+    if(modes.some(c=>c.mode==='merge')){
+      wdVal='merge';
+      const firstMerge=modes.find(c=>c.mode==='merge');
+      if(firstMerge&&firstMerge.pk) pkRaw=firstMerge.pk;
+    } else if(modes.length){
+      wdVal=modes[0].mode||wdVal;
+    }
+  }catch(e){}
   const primary_key=pkRaw?pkRaw.split(',').map(s=>s.trim()).filter(Boolean):[];
   const schedKind=(document.getElementById('f-sched-kind')||{}).value||'manual';
   const schedMin=parseInt((document.getElementById('f-sched-min')||{}).value||'60',10);
@@ -1717,7 +1827,7 @@ async function savePipeline(){
   const quality={row_count_min:qMin!==''?parseInt(qMin,10):null,not_null_columns:qNn?qNn.split(',').map(s=>s.trim()).filter(Boolean):[],no_duplicates_key:qDup||null,table_name:qTable||null};
   const tgChat=((document.getElementById('f-tg-chat')||{}).value||'').trim();
   const notify={on_failure:(document.getElementById('f-n-fail')||{}).checked!==false,on_success:!!(document.getElementById('f-n-ok')||{}).checked,telegram_chat_id:tgChat||null};
-  const body={name,connector_key:selectedConnector,source_params,secrets,destination:dest,write_disposition:(document.getElementById('f-wd')||{}).value||'replace',primary_key,schedule,quality,notify};
+  const body={name,connector_key:selectedConnector,source_params,secrets,destination:dest,write_disposition:wdVal||'replace',primary_key,schedule,quality,notify};
   if(saved_destination_id) body.saved_destination_id=saved_destination_id;
   try{
     await api('/api/pipelines',{method:'POST',body:JSON.stringify(body)});
