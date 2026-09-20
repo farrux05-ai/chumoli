@@ -57,11 +57,28 @@ def _sql_fields(
         ),
         FieldSpec(
             key="cursor_column",
-            label="Incremental ustun (ixtiyoriy)",
+            label="Vaqt / cursor ustun (ixtiyoriy)",
             type=FieldType.TEXT,
             required=False,
-            placeholder="updated_at",
-            help_text="Bo'sh qoldirilsa, har safar to'liq yuklanadi",
+            placeholder="updated_at yoki created_at",
+            help_text=(
+                "Filter va incremental shu ustun bo'yicha. "
+                "Masalan updated_at — faqat shu sanadan keyingi qatorlar. "
+                "Bo'sh = har safar to'liq jadval."
+            ),
+        ),
+        FieldSpec(
+            key="cursor_initial_value",
+            label="Qachondan boshlab (ixtiyoriy)",
+            type=FieldType.TEXT,
+            required=False,
+            placeholder="2016-05-01 yoki 2016-05-01T00:00:00",
+            help_text=(
+                "Birinchi run uchun boshlang'ich qiymat. "
+                "Masalan 2016-05-01 — o'sha sanadan boshlab. "
+                "Keyingi run'lar avtomatik davom etadi (cursor saqlanadi). "
+                "Raqamli cursor bo'lsa: 0 yoki 1000."
+            ),
         ),
     ]
 
@@ -91,6 +108,7 @@ def _preflight_sqlite(credentials: str) -> None:
         )
 
 
+
 def _build_sql_database_source(
     params: dict[str, Any], secrets: dict[str, str]
 ) -> Any:
@@ -102,7 +120,9 @@ def _build_sql_database_source(
     incremental() yig'iladi.
     """
     table_names = [t.strip() for t in params["table_names"].split(",") if t.strip()]
-    cursor_column = params.get("cursor_column") or None
+    cursor_column = (params.get("cursor_column") or "").strip() or None
+    from chumoli.core.cursor_utils import parse_cursor_value
+    cursor_initial = parse_cursor_value(params.get("cursor_initial_value"))
     credentials = secrets["connection_string"]
     _preflight_sqlite(credentials)
 
@@ -111,15 +131,21 @@ def _build_sql_database_source(
 
     import dlt
 
-    # Har bir jadvalga ALOHIDA incremental() obyekti — bitta obyektni
-    # bir nechta resource orasida ulashish holatni chalkashtirishi mumkin.
+    # Har bir jadvalga ALOHIDA incremental() — shared state chalkashmasin.
+    # initial_value: birinchi run "2016-05-01 dan boshlab" kabi vaqt filteri.
+    def _inc() -> Any:
+        kwargs: dict[str, Any] = {}
+        if cursor_initial is not None:
+            kwargs["initial_value"] = cursor_initial
+        return dlt.sources.incremental(cursor_column, **kwargs)
+
     @dlt.source(name="sql_database")
     def _incremental_source() -> Any:
         return [
             sql_table(
                 credentials=credentials,
                 table=t,
-                incremental=dlt.sources.incremental(cursor_column),
+                incremental=_inc(),
             )
             for t in table_names
         ]

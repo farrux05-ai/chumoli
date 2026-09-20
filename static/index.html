@@ -1159,7 +1159,7 @@ function renderStepConnection(body,foot){
   const connFields=(m?.fields||[]).filter(f=>
     f.secret||f.key==='connection_string'||f.key==='base_url'||AUTH_FIELDS.has(f.key)
   );
-  const fieldsToShow=connFields.length?connFields:(m?.fields||[]).filter(f=>!['table_names','cursor_column','resources'].includes(f.key));
+  const fieldsToShow=connFields.length?connFields:(m?.fields||[]).filter(f=>!['table_names','cursor_column','cursor_initial_value','resources'].includes(f.key));
   let statusHtml='';
   if(isSql){
     if(testState==='ok') statusHtml=`<div class="field-ok">✓ Ulanish tasdiqlandi${inspectedTables.length?' — '+inspectedTables.length+' jadval':''}</div>`;
@@ -1195,7 +1195,7 @@ function renderStepTables(body,foot){
   const step2Keys=new Set((m?.fields||[])
     .filter(f=>f.secret||f.key==='connection_string'||f.key==='base_url'||AUTH_FIELDS.has(f.key))
     .map(f=>f.key));
-  const resourceKeys=new Set(['table_names','cursor_column','resources','endpoint','from_days_ago']);
+  const resourceKeys=new Set(['table_names','cursor_column','cursor_initial_value','resources','endpoint','from_days_ago']);
   const fields=(m?.fields||[]).filter(f=>!step2Keys.has(f.key)&&(resourceKeys.has(f.key)||(!f.secret&&f.key!=='connection_string'&&f.key!=='base_url')));
 
   let tablesBlock='';
@@ -1235,7 +1235,7 @@ function renderStepTables(body,foot){
         </div>`}
         <div class="field-hint">${tables.length?'Qatorni bosib tanlang':'Vergul bilan ajrating'}</div>
       </div>
-      ${fields.filter(f=>f.key==='cursor_column').map(f=>fieldHtml(f)).join('')}`;
+      ${fields.filter(f=>f.key==='cursor_column'||f.key==='cursor_initial_value').map(f=>fieldHtml(f)).join('')}`;
   }else{
     tablesBlock=fields.map(f=>fieldHtml(f)).join('')||`<div style="color:var(--faint);font-size:13px;padding:8px 0">Bu ulagich uchun qo'shimcha sozlama kerak emas</div>`;
   }
@@ -1382,8 +1382,9 @@ function renderStepDestAndSave(body,foot){
       <summary style="cursor:pointer;font-size:12.5px;font-weight:600;color:var(--dim);padding:8px 0;user-select:none">Qo'shimcha: quality va bildirishnomalar</summary>
       <div style="padding-top:12px">
         <div class="field">
-          <label>Minimum qator soni</label>
+          <label>Minimum qator (sifat tekshiruvi)</label>
           <input id="f-q-min" type="number" min="0" placeholder="bo'sh = avto 1" value="${esc(dv('f-q-min',''))}"/>
+          <div class="field-hint">Bu filter emas — yuklashdan keyin "kamida N qator bormi?" tekshiradi. Vaqt filteri: manba qadamida cursor ustun + sana.</div>
         </div>
         <div class="field">
           <label>Not null ustunlar</label>
