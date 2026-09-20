@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="description" content="Chumoli — Uzbekistan data sources uchun lightweight EL tool"/>
 <title>Chumoli</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23d97706'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='18' font-weight='700' fill='white' text-anchor='middle'%3E%F0%9F%90%9C%3C/text%3E%3C/svg%3E"/>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23d97706'/%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M 44 32 Q 36 20 28 22'/%3E%3Cpath d='M 56 32 Q 64 20 72 22'/%3E%3Cpath d='M 44 48 Q 28 42 22 52'/%3E%3Cpath d='M 56 48 Q 72 42 78 52'/%3E%3Cpath d='M 44 54 Q 26 56 20 68'/%3E%3Cpath d='M 56 54 Q 74 56 80 68'/%3E%3Cpath d='M 44 60 Q 30 72 26 82'/%3E%3Cpath d='M 56 60 Q 70 72 74 82'/%3E%3C/g%3E%3Cg fill='%23ffffff'%3E%3Ccircle cx='50' cy='34' r='8'/%3E%3Cellipse cx='50' cy='52' rx='6' ry='9'/%3E%3Cellipse cx='50' cy='73' rx='11' ry='14'/%3E%3C/g%3E%3C/svg%3E" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -203,10 +203,34 @@ tbody tr:hover{background:var(--surface-2)}
 <body>
 <div id="app">
   <aside id="sidebar">
-    <div class="logo">
-      <div class="logo-mark">🐜</div>
-      Chumoli
-    </div>
+      <div class="logo">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="32" height="32" style="border-radius: 8px; flex-shrink: 0;">
+          <defs>
+            <linearGradient id="ant-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#f59e0b"/>
+              <stop offset="50%" stop-color="#d97706"/>
+              <stop offset="100%" stop-color="#b45309"/>
+            </linearGradient>
+          </defs>
+          <rect width="100" height="100" rx="22" fill="url(#ant-bg)"/>
+          <g fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M 44 32 Q 36 20 28 22"/>
+            <path d="M 56 32 Q 64 20 72 22"/>
+            <path d="M 44 48 Q 28 42 22 52"/>
+            <path d="M 56 48 Q 72 42 78 52"/>
+            <path d="M 44 54 Q 26 56 20 68"/>
+            <path d="M 56 54 Q 74 56 80 68"/>
+            <path d="M 44 60 Q 30 72 26 82"/>
+            <path d="M 56 60 Q 70 72 74 82"/>
+          </g>
+          <g fill="#ffffff">
+            <circle cx="50" cy="34" r="8"/>
+            <ellipse cx="50" cy="52" rx="6" ry="9"/>
+            <ellipse cx="50" cy="73" rx="11" ry="14"/>
+          </g>
+        </svg>
+        Chumoli
+      </div>
     <div class="nav-section">
       <div class="nav-label">Asosiy</div>
       <button class="nav-item active" data-page="pipelines">
@@ -464,17 +488,43 @@ function renderPipelines(){
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Yangi pipeline
         </button>
-      </div>
-      <div class="empty-state">
-        <div class="empty-icon">🐜</div>
-        <div class="empty-title">Birinchi pipeline'ni yarating</div>
-        <div class="empty-desc">Ma'lumotlarni manbadan warehousega bir marta yoki jadval asosida yuklang. Qurilma sozlash shart emas.</div>
-        <div class="empty-actions">
-          <button class="btn btn-primary" id="btn-add2">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            O'zingiz yarating
-          </button>
         </div>
+              <div class="empty-state">
+                <div class="empty-icon" style="display: flex; justify-content: center; margin-bottom: 14px;">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="64" height="64" style="border-radius: 14px;">
+                    <defs>
+                      <linearGradient id="ant-bg-empty" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#f59e0b"/>
+                        <stop offset="50%" stop-color="#d97706"/>
+                        <stop offset="100%" stop-color="#b45309"/>
+                      </linearGradient>
+                    </defs>
+                    <rect width="100" height="100" rx="22" fill="url(#ant-bg-empty)"/>
+                    <g fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M 44 32 Q 36 20 28 22"/>
+                      <path d="M 56 32 Q 64 20 72 22"/>
+                      <path d="M 44 48 Q 28 42 22 52"/>
+                      <path d="M 56 48 Q 72 42 78 52"/>
+                      <path d="M 44 54 Q 26 56 20 68"/>
+                      <path d="M 56 54 Q 74 56 80 68"/>
+                      <path d="M 44 60 Q 30 72 26 82"/>
+                      <path d="M 56 60 Q 70 72 74 82"/>
+                    </g>
+                    <g fill="#ffffff">
+                      <circle cx="50" cy="34" r="8"/>
+                      <ellipse cx="50" cy="52" rx="6" ry="9"/>
+                      <ellipse cx="50" cy="73" rx="11" ry="14"/>
+                    </g>
+                  </svg>
+                </div>
+                <div class="empty-title">Birinchi pipeline'ni yarating</div>
+                <div class="empty-desc">Ma'lumotlarni manbadan warehousega bir marta yoki jadval asosida yuklang. Qurilma sozlash shart emas.</div>
+                <div class="empty-actions">
+                  <button class="btn btn-primary" id="btn-add2">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    O'zingiz yarating
+                  </button>
+                </div>
         <div class="quick-grid">
           <button class="quick-card" id="btn-demo-sql">
             <div class="quick-card-icon">🗄️</div>
