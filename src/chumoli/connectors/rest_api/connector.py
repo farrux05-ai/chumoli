@@ -53,76 +53,81 @@ MANIFEST = ConnectorManifest(
     fields=[
         FieldSpec(
             key="base_url",
-            label="Base URL",
+            label="Asosiy URL",
             type=FieldType.TEXT,
             required=True,
             placeholder="https://api.example.com",
+            help_text="API ning bosh manzili. Endpoint alohida qo'shiladi.",
         ),
         FieldSpec(
             key="endpoint",
-            label="Endpoint",
+            label="Endpoint (yo'l)",
             type=FieldType.TEXT,
             required=True,
-            placeholder="/data",
+            placeholder="/posts",
             help_text=(
-                "Base URL'ga qo'shiladigan yo'l, masalan /users. "
-                "Query parametrlarni (?page=1) yo'lga yozmang — "
-                "ular alohida sozlanadi yoki max_pages bilan cheklanadi."
+                "Asosiy URL ga qo'shiladigan yo'l — masalan /posts yoki /api/v1/orders. "
+                "? belgisidan keyingi query parametrlarni yozmang."
             ),
         ),
         FieldSpec(
             key="auth_type",
-            label="Autentifikatsiya turi",
+            label="Kirish turi",
             type=FieldType.SELECT,
             required=True,
             default="none",
             options=[
-                SelectOption(value="none", label="Yo'q"),
-                SelectOption(value="api_key", label="API key"),
+                SelectOption(value="none", label="Ochiq API — token kerak emas"),
+                SelectOption(value="api_key", label="API kalit (header yoki URL)"),
                 SelectOption(value="bearer", label="Bearer token"),
-                SelectOption(value="basic", label="Login/parol (Basic)"),
+                SelectOption(value="basic", label="Login + parol (Basic)"),
             ],
         ),
         FieldSpec(
             key="auth_key_name",
-            label="Header/parametr nomi",
+            label="Kalit nomi",
             type=FieldType.TEXT,
             required=False,
             default="X-API-Key",
             help_text=(
-                "Faqat 'API key' uchun. Header: X-API-Key; "
-                "Query (NASA/TMDB v3): api_key. Bearer uchun kerak emas."
+                "API kalit qanday nomlanadi? "
+                "Header: X-API-Key, Authorization; "
+                "URL: api_key, token, appid (NASA, TMDB)"
             ),
         ),
         FieldSpec(
             key="auth_location",
-            label="API key joylashuvi",
+            label="Kalit qayerga qo'yiladi",
             type=FieldType.SELECT,
             required=False,
             default="header",
             options=[
-                SelectOption(value="header", label="Header"),
-                SelectOption(value="query", label="Query parametr"),
+                SelectOption(value="header", label="Header (standart, xavfsizroq)"),
+                SelectOption(value="query", label="URL ichida (?api_key=…)"),
             ],
-            help_text="API key uchun: header yoki URL query (?api_key=…)",
+            help_text="Ko'p API'lar header ishlatadi. NASA, OpenWeather URL ishlatadi.",
         ),
         FieldSpec(
             key="secret_value",
-            label="API key / token / parol",
+            label="Token / API kalit / Parol",
             type=FieldType.PASSWORD,
             required=False,
             secret=True,
-            help_text="auth_type 'Yo'q' bo'lsa bo'sh qoldiring. Basic: login:parol",
+            help_text=(
+                "Ochiq API (token kerak emas) bo'lsa bo'sh qoldiring. "
+                "Basic kirish uchun: login:parol formatida."
+            ),
         ),
         FieldSpec(
             key="max_pages",
-            label="Max sahifalar",
+            label="Sahifalar chegarasi",
             type=FieldType.NUMBER,
             required=False,
             default="1",
             help_text=(
-                "Pagination chegarasi. 1 = faqat birinchi sahifa (tavsiya etiladi "
-                "sinov uchun). Katta API (TMDB) da cheklanmasa run uzoq davom etadi."
+                "1 = faqat birinchi sahifa (sinov uchun). "
+                "Ko'proq ma'lumot kerak bo'lsa oshiring — masalan 10 yoki 50. "
+                "Cheksiz qoldirsangiz juda uzoq ishlashi mumkin."
             ),
         ),
     ],

@@ -1180,8 +1180,10 @@ const AUTH_FIELDS=new Set(['auth_type','auth_key_name','auth_location','max_page
 function renderStepConnection(body,foot){
   const m=connectors.find(x=>x.key===selectedConnector);
   const isSql=isSqlConnector(selectedConnector);
+  const isRest=selectedConnector==='rest_api';
+  // endpoint ni ham step2 ga qo'shamiz (REST uchun)
   const connFields=(m?.fields||[]).filter(f=>
-    f.secret||f.key==='connection_string'||f.key==='base_url'||AUTH_FIELDS.has(f.key)
+    f.secret||f.key==='connection_string'||f.key==='base_url'||f.key==='endpoint'||AUTH_FIELDS.has(f.key)
   );
   const fieldsToShow=connFields.length?connFields:(m?.fields||[]).filter(f=>!['table_names','cursor_column','cursor_initial_value','table_cursors','resources'].includes(f.key));
   let statusHtml='';
@@ -1198,7 +1200,6 @@ function renderStepConnection(body,foot){
     </div>
     ${fieldsToShow.map(f=>fieldHtml(f)).join('')}
     ${isSql?`<button type="button" class="btn btn-outline" id="btn-inspect" style="width:100%;margin-top:4px">Ulanishni tekshirish</button>${statusHtml}`:''}`;
-  // Next always enabled — SQL will auto-inspect on click if needed
   foot.innerHTML=`<button class="btn btn-ghost" id="back2">← Orqaga</button><button class="btn btn-primary" id="next2">Keyingi →</button>`;
   document.getElementById('back2').onclick=()=>{ captureDraft(); step=1; renderDrawer(); };
   document.getElementById('next2').onclick=async ()=>{
@@ -1206,12 +1207,21 @@ function renderStepConnection(body,foot){
     const name=((nameEl&&nameEl.value)||draft['f-name']||editingName||'').toString().trim();
     if(!name){ toast('Pipeline nomi majburiy','err'); return; }
     draft['f-name']=name;
+    // REST: endpoint validation
+    if(isRest){
+      const epEl=document.getElementById('f-endpoint');
+      const ep=((epEl&&epEl.value)||draft['f-endpoint']||'').trim();
+      if(!ep){
+        toast("Endpoint majburiy — masalan /posts yoki /api/v1/orders",'err');
+        epEl?.focus();
+        return;
+      }
+    }
     const connEl=document.getElementById('f-connection_string');
     if(connEl&&connEl.value) draft['f-connection_string']=connEl.value;
     if(isSql){
       const conn=(connEl&&connEl.value.trim())||(draft['f-connection_string']||'');
       if(!conn){ toast('Connection string kiriting','err'); return; }
-      // Auto-inspect if not yet verified
       if(testState!=='ok'){
         const n2=document.getElementById('next2');
         if(n2){ n2.disabled=true; n2.textContent='Tekshirilmoqda…'; }
@@ -1230,7 +1240,6 @@ function renderStepConnection(body,foot){
     step=3; renderDrawer();
   };
   document.getElementById('btn-inspect')?.addEventListener('click',runSqlInspect);
-  // Track last verified connection to avoid false invalidation from password re-render
   document.getElementById('f-connection_string')?.addEventListener('input',()=>{
     const el=document.getElementById('f-connection_string');
     if(testState==='ok'&&el&&el.value&&el.value!==(draft['f-connection_string']||'')){
@@ -1239,6 +1248,22 @@ function renderStepConnection(body,foot){
       if(ok) ok.remove();
     }
   });
+  // REST API: auth_type o'zgarganda keraksiz field'larni yashirish
+  if(isRest){
+    function syncAuthVisibility(){
+      const authType=document.getElementById('f-auth_type')?.value||'none';
+      const showKey=authType==='api_key';
+      const showSecret=authType!=='none';
+      const keyWrap=document.getElementById('f-auth_key_name')?.closest('.field');
+      if(keyWrap) keyWrap.style.display=showKey?'':'none';
+      const locWrap=document.getElementById('f-auth_location')?.closest('.field');
+      if(locWrap) locWrap.style.display=showKey?'':'none';
+      const secretWrap=document.getElementById('f-secret_value')?.closest('.field');
+      if(secretWrap) secretWrap.style.display=showSecret?'':'none';
+    }
+    document.getElementById('f-auth_type')?.addEventListener('change',syncAuthVisibility);
+    syncAuthVisibility();
+  }
 }
 
 
@@ -1289,7 +1314,7 @@ function renderStepTables(body,foot){
   const m=connectors.find(x=>x.key===selectedConnector);
   const isSql=isSqlConnector(selectedConnector);
   const step2Keys=new Set((m?.fields||[])
-    .filter(f=>f.secret||f.key==='connection_string'||f.key==='base_url'||AUTH_FIELDS.has(f.key))
+    .filter(f=>f.secret||f.key==='connection_string'||f.key==='base_url'||f.key==='endpoint'||AUTH_FIELDS.has(f.key))
     .map(f=>f.key));
   // table_cursors / table_names handled specially for SQL; skip generic field render for them
   const resourceKeys=new Set(['table_names','cursor_column','cursor_initial_value','table_cursors','resources','endpoint','from_days_ago']);
@@ -1354,7 +1379,7 @@ function renderStepTables(body,foot){
         <div class="field-hint">${tables.length?'Har bir jadval uchun alohida cursor ustun va boshlang\'ich sana (ixtiyoriy). Bo\'sh = to\'liq yuklash.':'Vergul bilan ajrating'}</div>
       </div>`;
   }else{
-    tablesBlock=fields.filter(f=>!['table_names','table_cursors','cursor_column','cursor_initial_value'].includes(f.key)).map(f=>fieldHtml(f)).join('')||`<div style="color:var(--faint);font-size:13px;padding:8px 0">Bu ulagich uchun qo'shimcha sozlama kerak emas</div>`;
+    tablesBlock=fields.filter(f=>!['table_names','table_cursors','cursor_column','cursor_initial_value','endpoint'].includes(f.key)).map(f=>fieldHtml(f)).join('')||`<div style="color:var(--faint);font-size:13px;padding:8px 0">Bu ulagich uchun qo'shimcha sozlama kerak emas</div>`;
   }
 
   body.innerHTML=stepBarHtml(3,4)+tablesBlock;

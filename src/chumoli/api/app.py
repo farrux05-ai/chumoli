@@ -774,7 +774,6 @@ def demo_rest() -> dict[str, Any]:
             "base_url": "https://jsonplaceholder.typicode.com",
             "endpoint": "/posts",
             "auth_type": "none",
-            "auth_key_name": "Authorization",
         },
         destination=DestinationConfig(
             connector="duckdb", connection=duck_path, dataset_name="demo"
