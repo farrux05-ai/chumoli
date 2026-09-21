@@ -431,7 +431,8 @@ def drop_resource(name: str, resource: str, store: ControlStore | None = None) -
         )
         if result.returncode != 0:
             err = (result.stderr or result.stdout or "").strip()[:400]
-            return {"status": "error", "detail": f"Drop xatosi: {err or 'noma\'lum'}"}
+            msg = err or "noma'lum"
+            return {"status": "error", "detail": f"Drop xatosi: {msg}"}
         return {"status": "ok", "detail": f"Resource o'chirildi: {res}"}
     except subprocess.TimeoutExpired:
         return {"status": "error", "detail": "Drop timeout (60s)"}

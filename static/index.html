@@ -1028,6 +1028,12 @@ function pollRun(runId,name,btn){
       if(page==='pipelines') renderPipelines();
       btn.disabled=false; btn.textContent='▶ Run';
     }catch(e){
+      if(e.status===404){
+        clearInterval(pollTimers[runId]);
+        btn.disabled=false; btn.textContent='▶ Run';
+        toast("Server qayta ishga tushdi — Runs bo'limidan tekshiring",'err');
+        return;
+      }
       if(n>8){ clearInterval(pollTimers[runId]); btn.disabled=false; btn.textContent='▶ Run'; toast(e.message,'err'); }
     }
   },intervalMs);
@@ -1555,7 +1561,8 @@ function renderStepDestAndSave(body,foot){
     </div>
     <div class="field" id="sched-interval-wrap" style="display:none">
       <label>Interval (daqiqa)</label>
-      <input id="f-sched-min" type="number" min="1" value="${esc(dv('f-sched-min','60'))}"/>
+      <input id="f-sched-min" type="number" min="5" value="${esc(dv('f-sched-min','60'))}"/>
+      <div class="field-hint">Kamida 5 daqiqa. Tez-tez ishlatish log va resursni to'ldiradi.</div>
     </div>
     <div class="field" id="sched-daily-wrap" style="display:none">
       <label>Har kuni soat</label>
@@ -1568,7 +1575,7 @@ function renderStepDestAndSave(body,foot){
       <div style="padding-top:12px">
         <div class="field">
           <label>Minimum qator (sifat tekshiruvi)</label>
-          <input id="f-q-min" type="number" min="0" placeholder="bo'sh = avto 1" value="${esc(dv('f-q-min',''))}"/>
+          <input id="f-q-min" type="number" min="0" placeholder="bo'sh = tekshiruv yo'q" value="${esc(dv('f-q-min',''))}"/>
           <div class="field-hint">Bu filter emas — yuklashdan keyin "kamida N qator bormi?" tekshiradi. Vaqt filteri: manba qadamida cursor ustun + sana.</div>
         </div>
         <div class="field">
@@ -1578,6 +1585,9 @@ function renderStepDestAndSave(body,foot){
         <div class="field">
           <label>Takrorlash tekshiruvi (ustun)</label>
           <input id="f-q-dup" placeholder="id" value="${esc(dv('f-q-dup',''))}"/>
+          <div class="field-hint" id="dup-hint" style="display:none;color:var(--amber)">
+            ⚠ Append mode bilan birga ishlatsangiz har run fail bo'ladi — replace yoki merge tanlang
+          </div>
         </div>
         <div class="field">
           <label>Telegram chat ID</label>
@@ -1644,6 +1654,17 @@ function renderStepDestAndSave(body,foot){
   const wd=document.getElementById('f-wd');
   const syncWd=()=>{ const w=document.getElementById('pk-wrap'); if(w) w.style.display=wd?.value==='merge'?'block':'none'; };
   if(wd && !document.getElementById('table-write-list')){ wd.onchange=syncWd; syncWd(); }
+
+  function syncDupHint(){
+    const wdEl = document.getElementById('f-wd');
+    const dup = document.getElementById('f-q-dup');
+    const hint = document.getElementById('dup-hint');
+    if(!wdEl || !dup || !hint) return;
+    hint.style.display = (wdEl.value==='append' && dup.value.trim()) ? 'block' : 'none';
+  }
+  document.getElementById('f-wd')?.addEventListener('change', syncDupHint);
+  document.getElementById('f-q-dup')?.addEventListener('input', syncDupHint);
+  syncDupHint();
 
   function collectTableWrite(){
     const list=document.getElementById('table-write-list');
@@ -1813,6 +1834,10 @@ async function savePipeline(){
   const primary_key=pkRaw?pkRaw.split(',').map(s=>s.trim()).filter(Boolean):[];
   const schedKind=(document.getElementById('f-sched-kind')||{}).value||'manual';
   const schedMin=parseInt((document.getElementById('f-sched-min')||{}).value||'60',10);
+  if(schedKind==='interval' && (isNaN(schedMin) || schedMin<5)){
+    toast("Interval kamida 5 daqiqa bo'lishi kerak",'err');
+    return;
+  }
   const schedTime=((document.getElementById('f-sched-time')||{}).value||'10:00').trim();
   const schedule={
     kind:schedKind,
