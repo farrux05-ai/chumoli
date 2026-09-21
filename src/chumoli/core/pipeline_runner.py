@@ -351,10 +351,34 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
         else:
             os.environ.pop("NORMALIZE__DATA_WRITER__DISABLE_COMPRESSION", None)
 
+    # Stale pending packages from a previous failed load (e.g. _dlt_load_id
+    # NOT NULL) block the next run — clear them before starting.
+    try:
+        pipeline.drop_pending_packages()
+    except Exception as e:
+        log.warning("drop_pending_packages_pre_run pipeline=%s: %s", name, e)
+
     peak_memory_mb = 0.0
     tracemalloc.start()
     try:
-        load_info = pipeline.run(source, **run_kwargs)
+        try:
+            load_info = pipeline.run(source, **run_kwargs)
+        except Exception as run_exc:
+            # Recover once from broken pending package / NULL _dlt_load_id
+            msg = str(run_exc)
+            if "_dlt_load_id" in msg or "Constraint Error" in msg or "NOT NULL constraint" in msg:
+                log.warning(
+                    "load_constraint_retry pipeline=%s — dropping pending packages: %s",
+                    name,
+                    msg[:200],
+                )
+                try:
+                    pipeline.drop_pending_packages()
+                except Exception:
+                    log.exception("drop_pending_packages_retry_failed pipeline=%s", name)
+                load_info = pipeline.run(source, **run_kwargs)
+            else:
+                raise
         _, peak_mem = tracemalloc.get_traced_memory()
         peak_memory_mb = round(peak_mem / 1024 / 1024, 1)
     finally:
