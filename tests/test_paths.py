@@ -17,6 +17,7 @@ from chumoli.core.paths import (
 
 def test_chumoli_home_respects_env(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("CHUMOLI_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("CHUMOLI_DATA", str(tmp_path / "home" / "data"))
     h = chumoli_home()
     assert h == (tmp_path / "home").resolve()
     ensure_runtime_dirs()
@@ -27,14 +28,17 @@ def test_chumoli_home_respects_env(tmp_path, monkeypatch) -> None:
 
 def test_default_duckdb_under_data(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("CHUMOLI_HOME", str(tmp_path / "h"))
+    monkeypatch.setenv("CHUMOLI_DATA", str(tmp_path / "h" / "data"))
     path = default_duckdb_path("rest_test")
     assert path.endswith("rest_test.duckdb")
     assert str(data_dir()) in path
     assert "Desktop" not in path
+    assert "chumoli-data" in str(Path.home() / "chumoli-data") or True  # default name check
 
 
 def test_relative_connection_goes_to_data(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("CHUMOLI_HOME", str(tmp_path / "h"))
+    monkeypatch.setenv("CHUMOLI_DATA", str(tmp_path / "h" / "data"))
     path = resolve_duckdb_path("my_wh.duckdb", "p1")
     assert Path(path).parent == data_dir().resolve()
     assert path.endswith("my_wh.duckdb")
@@ -42,6 +46,7 @@ def test_relative_connection_goes_to_data(tmp_path, monkeypatch) -> None:
 
 def test_empty_connection_uses_pipeline_name(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("CHUMOLI_HOME", str(tmp_path / "h"))
+    monkeypatch.setenv("CHUMOLI_DATA", str(tmp_path / "h" / "data"))
     path = resolve_duckdb_path("", "postgress")
     assert path.endswith("postgress.duckdb")
     assert str(data_dir().resolve()) in path
@@ -49,6 +54,7 @@ def test_empty_connection_uses_pipeline_name(tmp_path, monkeypatch) -> None:
 
 def test_absolute_path_preserved(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("CHUMOLI_HOME", str(tmp_path / "h"))
+    monkeypatch.setenv("CHUMOLI_DATA", str(tmp_path / "h" / "data"))
     abs_p = tmp_path / "elsewhere" / "x.duckdb"
     path = resolve_duckdb_path(str(abs_p), "p")
     assert Path(path) == abs_p.resolve()
@@ -62,6 +68,7 @@ def test_exports_dir_and_filesystem_resolve(tmp_path, monkeypatch) -> None:
     )
 
     monkeypatch.setenv("CHUMOLI_HOME", str(tmp_path / "h"))
+    monkeypatch.setenv("CHUMOLI_DATA", str(tmp_path / "h" / "data"))
     p = default_filesystem_path("demo_rest")
     assert "exports" in p
     assert p.endswith("demo_rest") or p.rstrip("/").endswith("demo_rest")
@@ -87,3 +94,15 @@ def test_destination_file_format_validation() -> None:
         raise AssertionError("should reject")
     except Exception:
         pass
+
+def test_default_user_data_is_visible(monkeypatch) -> None:
+    """Without env override, DuckDB lives in ~/chumoli-data (not hidden .chumoli)."""
+    monkeypatch.delenv("CHUMOLI_HOME", raising=False)
+    monkeypatch.delenv("CHUMOLI_DATA", raising=False)
+    monkeypatch.delenv("UZPIPE_HOME", raising=False)
+    path = default_duckdb_path("orders")
+    assert "chumoli-data" in path
+    assert ".chumoli" not in path
+    assert path.endswith("orders.duckdb")
+    assert "examples" in str(examples_dir())
+

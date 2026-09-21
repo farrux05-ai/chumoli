@@ -664,10 +664,12 @@ def get_preview_rows(
     """First N rows per loaded table (UI preview). Max 3 tables."""
     # DuckDB (and many warehouses) reject concurrent writers — never open
     # a second connection while this pipeline is still loading.
-    if name in get_running_pipelines():
+    running = get_running_pipelines()
+    if name in running:
+        step = running[name].get("step", "run")
         return {
             "tables": {},
-            "error": "Pipeline hozir ishlayapti. Preview uchun tugashini kuting.",
+            "error": f"Pipeline hozir ishlayapti ({step}). Tugaguncha kuting.",
         }
     _, stored = _load_stored(name, store)
     if stored.config.destination.connector == "filesystem":

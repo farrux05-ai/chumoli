@@ -2,15 +2,19 @@
 chumoli.core.paths
 =================
 
-Barcha runtime fayllar uchun yagona joy: $CHUMOLI_HOME (default ~/.chumoli).
+Runtime fayllar ikki joyda:
 
-  $CHUMOLI_HOME/
+  $CHUMOLI_HOME/          (default ~/.chumoli) — yashirin, tizim fayllari
     chumoli_control.db
     master.key
     api.key
-    pipelines/          # dlt working dir / schema state
-    data/               # default DuckDB warehouses
-    examples/           # demo destinations
+    pipelines/            # dlt working dir / schema state
+    exports/              # filesystem destination
+
+  ~/chumoli-data/         — foydalanuvchi ko'radigan DuckDB va demo fayllar
+    <pipeline>.duckdb
+    examples/
+    warehouse.duckdb
 """
 
 from __future__ import annotations
@@ -23,7 +27,7 @@ _PIPELINE_NAME_SAFE = re.compile(r"[^a-zA-Z0-9._-]+")
 
 
 def chumoli_home() -> Path:
-    """Root for control DB, keys, pipelines state, and data files.
+    """Root for control DB, keys, pipelines state (hidden).
 
     Resolution order:
       1. $CHUMOLI_HOME
@@ -43,8 +47,20 @@ def chumoli_home() -> Path:
     return new_home.resolve()
 
 
+def user_data_dir() -> Path:
+    """Visible DuckDB / demo root: ~/chumoli-data (user can find it).
+
+    Override with $CHUMOLI_DATA for tests or custom installs.
+    """
+    raw = os.environ.get("CHUMOLI_DATA", "").strip()
+    if raw:
+        return Path(raw).expanduser().resolve()
+    return Path.home() / "chumoli-data"
+
+
 def data_dir() -> Path:
-    return chumoli_home() / "data"
+    """Default DuckDB warehouse folder (user-visible)."""
+    return user_data_dir()
 
 
 def pipelines_dir() -> Path:
@@ -52,7 +68,8 @@ def pipelines_dir() -> Path:
 
 
 def examples_dir() -> Path:
-    return chumoli_home() / "examples"
+    """Demo destinations: ~/chumoli-data/examples/"""
+    return user_data_dir() / "examples"
 
 
 def exports_dir() -> Path:
@@ -60,11 +77,15 @@ def exports_dir() -> Path:
 
 
 def ensure_runtime_dirs() -> Path:
-    """Create home + data + pipelines + examples with restrictive mode."""
+    """Create system home + user-visible data dirs."""
     home = chumoli_home()
     home.mkdir(mode=0o700, parents=True, exist_ok=True)
-    for sub in (data_dir(), pipelines_dir(), examples_dir(), exports_dir()):
+    for sub in (pipelines_dir(), exports_dir()):
         sub.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # User-visible data (more open permissions so analyst can browse)
+    ud = user_data_dir()
+    ud.mkdir(mode=0o755, parents=True, exist_ok=True)
+    examples_dir().mkdir(mode=0o755, parents=True, exist_ok=True)
     return home
 
 
@@ -74,30 +95,34 @@ def safe_pipeline_filename(name: str) -> str:
 
 
 def default_duckdb_path(pipeline_name: str) -> str:
-    """Absolute path: $CHUMOLI_HOME/data/<pipeline>.duckdb"""
+    """~/chumoli-data/<pipeline>.duckdb — foydalanuvchi topa oladi"""
     ensure_runtime_dirs()
-    return str(data_dir() / f"{safe_pipeline_filename(pipeline_name)}.duckdb")
+    home = user_data_dir()
+    home.mkdir(mode=0o755, parents=True, exist_ok=True)
+    return str(home / f"{safe_pipeline_filename(pipeline_name)}.duckdb")
 
 
 def resolve_duckdb_path(connection: str, pipeline_name: str | None = None) -> str:
     """Normalize user/empty DuckDB path so files never land in CWD.
 
-    - empty → default under data/
+    - empty → ~/chumoli-data/<pipeline>.duckdb or warehouse.duckdb
     - ~/... → expanduser
-    - relative path → under data/
+    - relative path → under ~/chumoli-data/
     - absolute → as-is
     """
     ensure_runtime_dirs()
     raw = (connection or "").strip()
     if not raw:
         if not pipeline_name:
-            return str(data_dir() / "warehouse.duckdb")
+            home = user_data_dir()
+            home.mkdir(mode=0o755, parents=True, exist_ok=True)
+            return str(home / "warehouse.duckdb")
         return default_duckdb_path(pipeline_name)
 
     path = Path(raw).expanduser()
     if not path.is_absolute():
         path = data_dir() / path
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
     return str(path.resolve())
 
 

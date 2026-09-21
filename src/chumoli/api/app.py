@@ -773,7 +773,11 @@ def demo_sql() -> dict[str, Any]:
     config = PipelineConfig(
         name=name,
         connector_key="sql_database",
-        source_params={"table_names": "orders, customers"},
+        source_params={
+            "table_names": "orders, customers",
+            "backend": "pyarrow",
+            "chunk_size": "100000",
+        },
         destination=DestinationConfig(
             connector="duckdb", connection=duck_path, dataset_name="demo"
         ),

@@ -238,11 +238,13 @@ def _build_sql_database_source(
 
     # Simple path: no cursor, no schema-qualify, no per-table write → sql_database
     if not has_cursor and not has_schema and not has_write:
+        backend = (params.get("backend") or "pyarrow").strip() or "pyarrow"
+        chunk_size = int(params.get("chunk_size") or 100_000)
         return sql_database(
             credentials=credentials,
             table_names=table_names,
-            backend="pyarrow",
-            chunk_size=50000,
+            backend=backend,
+            chunk_size=chunk_size,
         )
 
     if has_cursor:
@@ -260,11 +262,13 @@ def _build_sql_database_source(
     def _per_table_source() -> Any:
         resources = []
         for tref, schema, table, col, init_val, mode, pk_list in plan:
+            backend = (params.get("backend") or "pyarrow").strip() or "pyarrow"
+            chunk_size = int(params.get("chunk_size") or 100_000)
             kwargs: dict[str, Any] = {
                 "credentials": credentials,
                 "table": table,
-                "backend": "pyarrow",
-                "chunk_size": 50000,
+                "backend": backend,
+                "chunk_size": chunk_size,
             }
             if schema:
                 kwargs["schema"] = schema
