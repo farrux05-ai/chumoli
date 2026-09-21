@@ -368,7 +368,7 @@ function connectorIcon(key){ return CONNECTOR_ICONS[key] || `<svg width="18" hei
 let connectors = [], destinations = [], savedDestinations = [], pipelines = [], runs = [], runStats = {};
 let scheduler = {}, telegramCfg = {configured:false};
 let page = 'pipelines', selectedConnector = null, step = 1, draft = {}, editingName = null;
-let testState = 'idle', inspectedTables = [], inspectedDbLabel = '', inspectedColumns = {}, pollTimers = {}, recoverPipeline = null;
+let testState = 'idle', inspectedTables = [], inspectedDbLabel = '', inspectedColumns = {}, pollTimers = {}, recoverPipeline = null, activeRuns = {};
 
 function isSqlConnector(k){ return ['sql_database','postgresql','mysql'].includes(k); }
 
@@ -713,6 +713,7 @@ function renderPipelines(){
   c.querySelectorAll('[data-preview]').forEach(b=>b.onclick=()=>previewPipeline(b.dataset.preview));
   c.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>delPipeline(b.dataset.del));
   c.querySelectorAll('[data-recover]').forEach(b=>b.onclick=()=>openRecover(b.dataset.recover));
+  applyRunningUI();
 }
 
 async function previewPipeline(name){
@@ -1072,8 +1073,20 @@ async function runPipeline(name,btn){
   }
 }
 
+function runBtn(name, fallback){
+  return document.querySelector('[data-run="'+CSS.escape(name)+'"]') || fallback || null;
+}
+
+function setRunBtn(name, text, disabled, fallback){
+  const b=runBtn(name, fallback);
+  if(!b) return;
+  b.disabled=!!disabled;
+  b.textContent=text;
+}
+
 function pollRun(runId,name,btn){
   if(pollTimers[runId]) clearInterval(pollTimers[runId]);
+  activeRuns[name]={runId};
   let n=0;
   // ~15 min @ 1s — katta dataset / REST pagination uchun (backend async)
   const maxPolls=900;
@@ -1086,15 +1099,17 @@ function pollRun(runId,name,btn){
         const step=job.step||job.status;
         const label=STEP_LABELS[step]||step;
         const el=job.elapsed_seconds!=null?Math.round(job.elapsed_seconds)+'s':'';
-        btn.textContent=(label+(el?' · '+el:''));
+        setRunBtn(name, label+(el?' · '+el:''), true, btn);
         if(n>maxPolls){
           clearInterval(pollTimers[runId]);
-          btn.disabled=false; btn.textContent='▶ Run';
+          delete activeRuns[name];
+          setRunBtn(name, '▶ Run', false, btn);
           toast(name+' hali ishlayapti — keyinroq yangilang (timeout emas, backend davom etishi mumkin)','err');
         }
         return;
       }
       clearInterval(pollTimers[runId]);
+      delete activeRuns[name];
       if(job.status==='error'){
         toast('Xato: '+name+(job.error?' — '+job.error:''),'err');
       }else{
@@ -1102,17 +1117,75 @@ function pollRun(runId,name,btn){
       }
       pipelines=await api('/api/pipelines'); runs=await api('/api/runs?limit=50').catch(()=>runs);
       if(page==='pipelines') renderPipelines();
-      btn.disabled=false; btn.textContent='▶ Run';
+      setRunBtn(name, '▶ Run', false, btn);
     }catch(e){
       if(e.status===404){
         clearInterval(pollTimers[runId]);
-        btn.disabled=false; btn.textContent='▶ Run';
+        delete activeRuns[name];
+        setRunBtn(name, '▶ Run', false, btn);
         toast("Server qayta ishga tushdi — Runs bo'limidan tekshiring",'err');
         return;
       }
-      if(n>8){ clearInterval(pollTimers[runId]); btn.disabled=false; btn.textContent='▶ Run'; toast(e.message,'err'); }
+      if(n>8){
+        clearInterval(pollTimers[runId]);
+        delete activeRuns[name];
+        setRunBtn(name, '▶ Run', false, btn);
+        toast(e.message,'err');
+      }
     }
   },intervalMs);
+}
+
+/** Sahifa almashtirilganda / re-render da ishlayotgan pipeline tugmalarini tiklash */
+async function applyRunningUI(){
+  // Client-side active polls
+  Object.keys(activeRuns).forEach(name=>{
+    setRunBtn(name, 'Ishlayapti…', true);
+  });
+  // Server-side running (pollTimers yo'qolgan bo'lsa ham)
+  try{
+    const r=await api('/api/pipelines/running');
+    const running=r.running||{};
+    Object.keys(running).forEach(name=>{
+      const info=running[name]||{};
+      const step=info.step||'run';
+      const label=STEP_LABELS[step]||step;
+      const el=info.elapsed_seconds!=null?Math.round(info.elapsed_seconds)+'s':'';
+      setRunBtn(name, label+(el?' · '+el:''), true);
+      // Agar client poll yo'q bo'lsa — status orqali soft poll
+      const hasClientPoll=activeRuns[name]&&pollTimers[activeRuns[name].runId];
+      if(!hasClientPoll && !pollTimers['status:'+name]){
+        pollPipelineStatus(name);
+      }
+    });
+  }catch(_){ /* ignore */ }
+}
+
+function pollPipelineStatus(name){
+  const key='status:'+name;
+  if(pollTimers[key]) clearInterval(pollTimers[key]);
+  let n=0;
+  pollTimers[key]=setInterval(async()=>{
+    n++;
+    try{
+      const st=await api('/api/pipelines/'+encodeURIComponent(name)+'/status');
+      if(st.running){
+        const step=st.step||'run';
+        const label=STEP_LABELS[step]||step;
+        const el=st.elapsed_seconds!=null?Math.round(st.elapsed_seconds)+'s':'';
+        setRunBtn(name, label+(el?' · '+el:''), true);
+        if(n>900){ clearInterval(pollTimers[key]); delete pollTimers[key]; setRunBtn(name,'▶ Run',false); }
+        return;
+      }
+      clearInterval(pollTimers[key]);
+      delete pollTimers[key];
+      setRunBtn(name, '▶ Run', false);
+      pipelines=await api('/api/pipelines'); runs=await api('/api/runs?limit=50').catch(()=>runs);
+      if(page==='pipelines') renderPipelines();
+    }catch(e){
+      if(n>8){ clearInterval(pollTimers[key]); delete pollTimers[key]; setRunBtn(name,'▶ Run',false); }
+    }
+  },1500);
 }
 
 function showRunResult(name,r){

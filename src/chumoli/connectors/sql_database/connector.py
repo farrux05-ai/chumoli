@@ -224,6 +224,14 @@ def _build_sql_database_source(
 
     from dlt.sources.sql_database import sql_database, sql_table
 
+    try:
+        import pyarrow  # noqa: F401
+    except ImportError as e:
+        raise ImportError(
+            'SQL connector PyArrow backend uchun pyarrow kerak. '
+            'pip install "pyarrow>=14.0" yoki pip install -r requirements.txt'
+        ) from e
+
     has_cursor = any(p[3] for p in plan)
     has_schema = any(p[1] for p in plan)
     has_write = any(p[5] for p in plan)
