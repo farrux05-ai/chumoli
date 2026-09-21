@@ -10,6 +10,7 @@ authors = [{ name = "farrux05-ai" }]
 dependencies = [
     "dlt[duckdb]>=1.30",
     "dlt[sql_database]>=1.30",
+    "pyarrow>=14.0",
     "psycopg2-binary>=2.9",
     "pymysql>=1.1",
     "sqlalchemy>=2.0",

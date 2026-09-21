@@ -1,5 +1,6 @@
 # Production runtime (pin loosely for install reliability)
 dlt[duckdb,sql_database]>=1.30
+pyarrow>=14.0
 psycopg2-binary>=2.9
 pymysql>=1.1
 sqlalchemy>=2.0
