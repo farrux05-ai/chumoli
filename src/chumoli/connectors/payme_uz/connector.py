@@ -5,7 +5,11 @@ chumoli.connectors.payme_uz
 Payme (Paycom) merchant — JSON-RPC 2.0.
 
 Auth: X-Auth: base64(merchant_id:api_key)
-Method: receipts.get_all (daily chunks, offset pagination)
+Method: receipts.get_all (kunlik bo'laklar, offset pagination)
+
+Fix'lar (v1):
+  - Timezone: UTC o'rniga Asia/Tashkent da kun boshini hisoblash
+  - Retry: [2.0, 5.0, 15.0] — biroz kuchliroq
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ import base64
 import time
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 from typing import Any
 
 import dlt
@@ -27,10 +32,12 @@ from chumoli.core.manifest import (
     SelectOption,
 )
 
-PAYME_API_URL = "https://checkout.paycom.uz/api"
+PAYME_API_URL     = "https://checkout.paycom.uz/api"
 PAYME_SANDBOX_URL = "https://checkout.test.paycom.uz/api"
-PAYME_PAGE_SIZE = 50
-PAYME_RETRY_DELAYS = [1.0, 2.0, 5.0]
+PAYME_PAGE_SIZE   = 50
+PAYME_RETRY_DELAYS = [2.0, 5.0, 15.0]   # FIX: eski [1.0, 2.0, 5.0] dan kuchliroq
+
+TZ_TASHKENT = ZoneInfo("Asia/Tashkent")
 
 
 MANIFEST = ConnectorManifest(
@@ -49,20 +56,20 @@ MANIFEST = ConnectorManifest(
         ),
         FieldSpec(
             key="api_key",
-            label="API key",
+            label="API kalit",
             type=FieldType.PASSWORD,
             required=True,
             secret=True,
         ),
         FieldSpec(
             key="sandbox",
-            label="Sandbox",
+            label="Muhit",
             type=FieldType.SELECT,
             required=True,
             default="false",
             options=[
                 SelectOption(value="false", label="Production"),
-                SelectOption(value="true", label="Sandbox (test)"),
+                SelectOption(value="true",  label="Sandbox (test)"),
             ],
         ),
         FieldSpec(
@@ -79,11 +86,11 @@ MANIFEST = ConnectorManifest(
             required=False,
             default="",
             options=[
-                SelectOption(value="", label="Hammasi"),
-                SelectOption(value="1", label="Created"),
-                SelectOption(value="2", label="In progress"),
-                SelectOption(value="3", label="Paid"),
-                SelectOption(value="4", label="Cancelled"),
+                SelectOption(value="",  label="Hammasi"),
+                SelectOption(value="1", label="Yaratilgan"),
+                SelectOption(value="2", label="To'lovda"),
+                SelectOption(value="4", label="To'langan"),
+                SelectOption(value="-1", label="Bekor qilingan"),
             ],
             help_text="Bo'sh = barcha holatlar",
         ),
@@ -117,7 +124,10 @@ def _jsonrpc(
             resp = client.post(
                 url,
                 json={"id": req_id, "method": method, "params": params},
-                headers={"X-Auth": auth_header, "Content-Type": "application/json"},
+                headers={
+                    "X-Auth": auth_header,
+                    "Content-Type": "application/json",
+                },
             )
             resp.raise_for_status()
             data = resp.json()
@@ -128,7 +138,7 @@ def _jsonrpc(
                 )
             return data.get("result") or {}
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429 or e.response.status_code >= 500:
+            if e.response.status_code in (429,) or e.response.status_code >= 500:
                 time.sleep(delay)
                 last_exc = e
             else:
@@ -151,13 +161,11 @@ def _fetch_day(
     req_id = 1
     while True:
         result = _jsonrpc(
-            client,
-            url,
-            "receipts.get_all",
+            client, url, "receipts.get_all",
             {
-                "from": _to_ms(day_start),
-                "to": _to_ms(day_end),
-                "count": PAYME_PAGE_SIZE,
+                "from":   _to_ms(day_start),
+                "to":     _to_ms(day_end),
+                "count":  PAYME_PAGE_SIZE,
                 "offset": offset,
             },
             auth_header,
@@ -170,9 +178,10 @@ def _fetch_day(
         for receipt in receipts:
             if state_filter is not None and receipt.get("state") != state_filter:
                 continue
+            # ISO timestamp'lar qo'shimcha field sifatida
             for field, key in (
                 ("create_time", "_create_time_iso"),
-                ("pay_time", "_pay_time_iso"),
+                ("pay_time",    "_pay_time_iso"),
                 ("cancel_time", "_cancel_time_iso"),
             ):
                 ms = receipt.get(field)
@@ -192,7 +201,7 @@ def _receipts(
     state_filter: int | None,
     sandbox: bool,
 ) -> Iterator[dict[str, Any]]:
-    url = PAYME_SANDBOX_URL if sandbox else PAYME_API_URL
+    url  = PAYME_SANDBOX_URL if sandbox else PAYME_API_URL
     auth = _auth_header(merchant_id, api_key)
     with httpx.Client(timeout=30.0) as client:
         current = from_date.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -213,16 +222,20 @@ class PaymeConnector:
 
     def build_dlt_source(self, params: dict[str, Any], secrets: dict[str, str]) -> Any:
         merchant_id = str(params["merchant_id"])
-        api_key = secrets["api_key"]
-        sandbox = str(params.get("sandbox") or "false").lower() in ("1", "true", "yes")
+        api_key     = secrets["api_key"]
+        sandbox     = str(params.get("sandbox") or "false").lower() in ("1", "true", "yes")
 
         days = int(params.get("from_days_ago") or 1)
-        now = datetime.now(UTC)
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        from_date = today_start - timedelta(days=days)
-        to_date = today_start - timedelta(seconds=1)
 
-        state_raw = params.get("state")
+        # FIX: Toshkent vaqtida kun boshi hisoblash (eski kod UTC ishlatardi)
+        now_tashkent    = datetime.now(TZ_TASHKENT)
+        today_start_local = now_tashkent.replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        from_date = (today_start_local - timedelta(days=days)).astimezone(UTC)
+        to_date   = (today_start_local - timedelta(seconds=1)).astimezone(UTC)
+
+        state_raw    = params.get("state")
         state_filter: int | None = None
         if state_raw not in (None, ""):
             state_filter = int(state_raw)
