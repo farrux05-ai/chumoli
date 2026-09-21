@@ -97,6 +97,7 @@ tbody tr:hover{background:var(--surface-2)}
 .metric-dim{color:var(--faint)}
 .metric-speed{color:var(--accent-text)}
 .metric-time{color:var(--faint)}
+.metric-ram{color:var(--violet);font-size:11.5px}
 
 /* Ulagich pill in table */
 .conn-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);font-size:12px;font-weight:500;white-space:nowrap}
@@ -406,6 +407,11 @@ function fmtDur(s){
   if(n<60) return n.toFixed(1)+'s';
   return Math.floor(n/60)+'m '+ Math.round(n%60)+'s';
 }
+function fmtMem(mb){
+  if(!mb||mb<=0) return null;
+  if(mb>=1024) return (mb/1024).toFixed(1)+' GB';
+  return mb.toFixed(0)+' MB';
+}
 function fmtRows(n){
   if(n==null) return '—';
   if(n>=1000000) return (n/1000000).toFixed(1)+'M';
@@ -438,6 +444,10 @@ function lastRunSummary(lr){
   }
   if(lr.duration_seconds){
     parts.push(`<span class="metric-time">${fmtDur(lr.duration_seconds)}</span>`);
+  }
+  if(lr.peak_memory_mb>0){
+    const mem=fmtMem(lr.peak_memory_mb);
+    if(mem) parts.push(`<span class="metric-ram">${mem} RAM</span>`);
   }
   return `${badge} <span class="run-metrics">${parts.join(' · ')}</span>`;
 }
@@ -855,7 +865,10 @@ async function renderRuns(){
           <td>${lastRunBadge(r)}${qDetail}</td>
           <td class="mono">${rowsNewTotal(r)}</td>
           <td class="mono" style="color:var(--accent-text)">${r.rows_per_second>0?Math.round(r.rows_per_second).toLocaleString()+' q/s':'—'}</td>
-          <td class="mono" style="color:var(--dim)">${fmtDur(r.duration_seconds)}</td>
+          <td class="mono" style="color:var(--dim)">
+            ${fmtDur(r.duration_seconds)}
+            ${r.peak_memory_mb>0?`<div class="metric-ram">${fmtMem(r.peak_memory_mb)} RAM</div>`:''}
+          </td>
           <td style="color:var(--faint);font-size:11.5px">${cursor}</td>
         </tr>`;
       }).join('')}</tbody>
@@ -1107,10 +1120,11 @@ function showRunResult(name,r){
   const rows=Object.entries(r.row_counts||{}).map(([t,n])=>t+': '+n).join(', ')||(fmtRows(r.total_rows)+' qator');
   if(r.success&&r.quality_passed){
     const speedInfo=r.rows_per_second>0?` · ${Math.round(r.rows_per_second).toLocaleString()} q/s`:'';
+    const memStr=r.peak_memory_mb>0?` · ${fmtMem(r.peak_memory_mb)} RAM`:'';
     const rowInfo=(!r.is_first_run&&r.new_rows<r.total_rows)
       ? `+${fmtRows(r.new_rows)} yangi (jami ${fmtRows(r.total_rows)})`
       : rows;
-    toast(`✓ ${name} — ${rowInfo}${speedInfo}`,'ok');
+    toast(`✓ ${name} — ${rowInfo}${speedInfo}${memStr}`,'ok');
     if(r.schema_changes&&r.schema_changes.length>0){
       setTimeout(()=>{ toast('Schema yangilandi: '+r.schema_changes.join(', '),'ok'); },500);
     }
