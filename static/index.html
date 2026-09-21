@@ -92,6 +92,11 @@ tbody tr:hover{background:var(--surface-2)}
 .badge.err{color:var(--red);background:var(--red-bg)}
 .badge.warn{color:var(--amber);background:rgba(217,119,6,.12)}
 .badge.dim{color:var(--faint);background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--border)}
+.run-metrics{font-size:12px;color:var(--dim);margin-left:6px}
+.metric-new{color:var(--green);font-weight:500}
+.metric-dim{color:var(--faint)}
+.metric-speed{color:var(--accent-text)}
+.metric-time{color:var(--faint)}
 
 /* Ulagich pill in table */
 .conn-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);font-size:12px;font-weight:500;white-space:nowrap}
@@ -415,6 +420,36 @@ function lastRunBadge(lr){
   return '<span class="badge err"><span class="dot"></span>Fail</span>';
 }
 
+function lastRunSummary(lr){
+  if(!lr) return '<span class="badge dim">Hech qachon</span>';
+  const badge=lastRunBadge(lr);
+  if(!lr.success) return badge;
+  const parts=[];
+  if(lr.new_rows!=null&&lr.total_rows!=null){
+    if(!lr.is_first_run&&lr.new_rows<lr.total_rows){
+      parts.push(`<span class="metric-new">+${fmtRows(lr.new_rows)} yangi</span>`);
+      parts.push(`<span class="metric-dim">${fmtRows(lr.total_rows)} jami</span>`);
+    }else{
+      parts.push(`<span class="metric-new">${fmtRows(lr.total_rows)} qator</span>`);
+    }
+  }
+  if(lr.rows_per_second>0){
+    parts.push(`<span class="metric-speed">${Math.round(lr.rows_per_second).toLocaleString()} q/s</span>`);
+  }
+  if(lr.duration_seconds){
+    parts.push(`<span class="metric-time">${fmtDur(lr.duration_seconds)}</span>`);
+  }
+  return `${badge} <span class="run-metrics">${parts.join(' · ')}</span>`;
+}
+
+function rowsNewTotal(r){
+  if(!r) return '—';
+  if(r.new_rows&&!r.is_first_run&&r.new_rows<r.total_rows){
+    return `<span style="color:var(--green)">+${fmtRows(r.new_rows)}</span> / ${fmtRows(r.total_rows)}`;
+  }
+  return fmtRows(r.total_rows);
+}
+
 // Mini sparkline from last 10 runs for a pipeline
 function sparkline(pipelineName){
   const pRuns = runs.filter(r=>r.pipeline_name===pipelineName).slice(0,10).reverse();
@@ -634,7 +669,6 @@ function renderPipelines(){
       </tr></thead>
       <tbody>${pipelines.map(p=>{
         const lr=p.last_run;
-        const rowCount=lr&&lr.total_rows!=null?lr.total_rows:(lr&&lr.row_counts?Object.values(lr.row_counts).reduce((a,b)=>a+b,0):null);
         return `<tr>
           <td><strong style="font-size:13.5px">${esc(p.name)}</strong></td>
           <td>
@@ -644,10 +678,10 @@ function renderPipelines(){
             </span>
           </td>
           <td>
-            ${lastRunBadge(lr)}
+            ${lastRunSummary(lr)}
             ${lr?.finished_at?`<div style="font-size:11px;color:var(--faint);margin-top:3px">${fmtRelative(lr.finished_at)}</div>`:''}
           </td>
-          <td class="mono">${fmtRows(rowCount)}</td>
+          <td class="mono">${rowsNewTotal(lr)}</td>
           <td class="mono" style="color:var(--dim)">${lr?fmtDur(lr.duration_seconds):'—'}</td>
           <td>${sparkline(p.name)}</td>
           <td>
@@ -681,10 +715,32 @@ async function previewPipeline(name){
     const names=Object.keys(tables);
     if(!names.length){ toast("Ko'rsatish uchun ma'lumot yo'q",'err'); return; }
 
+    const pipe=pipelines.find(p=>p.name===name);
+    const lr=pipe&&pipe.last_run;
+    const colCounts=res.col_counts||(lr&&lr.col_counts)||{};
+    const rowCounts=(lr&&lr.row_counts)||{};
+
     document.getElementById('drawer-title').textContent=name+' — Preview';
     const body=document.getElementById('drawer-body');
     const foot=document.getElementById('drawer-foot');
     let html='';
+    const schemaNames=[...new Set([...Object.keys(colCounts),...Object.keys(rowCounts),...names])];
+    if(schemaNames.length){
+      html+=`<div style="margin-bottom:18px">
+        <div class="section-title">Schema</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Jadval</th><th>Qatorlar</th><th>Ustunlar</th></tr></thead>
+            <tbody>${schemaNames.map(t=>`<tr>
+              <td><strong>${esc(t)}</strong></td>
+              <td class="mono">${fmtRows(rowCounts[t])}</td>
+              <td class="mono">${colCounts[t]!=null?colCounts[t]:'—'}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </div>
+        ${lr&&lr.cursor_last_value!=null?`<div style="font-size:12px;color:var(--faint);margin-top:8px">Cursor: ${esc(String(lr.cursor_last_value))}</div>`:''}
+      </div>`;
+    }
     for(const tbl of names){
       const info=tables[tbl];
       if(info.error){
@@ -781,20 +837,26 @@ async function renderRuns(){
     </div>
     ${runs.length===0?`<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Hali run yo'q</div><div class="empty-desc">Pipeline'larni ishga tushirganingizdan keyin bu yerda ko'rinadi</div></div>`:`
     <div class="table-wrap"><table>
-      <thead><tr><th>Pipeline</th><th>Holat</th><th>Trigger</th><th>Qatorlar</th><th>Davomiylik</th><th>Vaqt</th></tr></thead>
+      <thead><tr><th>Pipeline</th><th>Holat</th><th>Yangi/Jami</th><th>Tezlik</th><th>Davomiylik</th><th>Cursor</th></tr></thead>
       <tbody>${runs.map(r=>{
         let qDetail='';
         if(r.success&&r.quality_passed===false&&Array.isArray(r.quality_details)){
           const f=r.quality_details.find(d=>d&&d.passed===false);
           if(f?.detail){ const t=String(f.detail); qDetail=`<div style="font-size:11px;color:var(--amber);margin-top:3px">${esc(t.length>70?t.slice(0,70)+'…':t)}</div>`; }
         }
+        const cursor=r.cursor_last_value!=null&&r.cursor_last_value!==''
+          ? `cursor: ${esc(String(r.cursor_last_value).slice(0,20))}`
+          : fmtRelative(r.finished_at);
         return `<tr>
-          <td><strong>${esc(r.pipeline_name)}</strong></td>
+          <td>
+            <strong>${esc(r.pipeline_name)}</strong>
+            <div style="font-size:11px;color:var(--faint);margin-top:2px">${esc(r.trigger||'—')}</div>
+          </td>
           <td>${lastRunBadge(r)}${qDetail}</td>
-          <td><span class="mono" style="font-size:11.5px;color:var(--dim)">${esc(r.trigger||'—')}</span></td>
-          <td class="mono">${fmtRows(r.total_rows)}</td>
+          <td class="mono">${rowsNewTotal(r)}</td>
+          <td class="mono" style="color:var(--accent-text)">${r.rows_per_second>0?Math.round(r.rows_per_second).toLocaleString()+' q/s':'—'}</td>
           <td class="mono" style="color:var(--dim)">${fmtDur(r.duration_seconds)}</td>
-          <td style="color:var(--faint);font-size:12px">${fmtRelative(r.finished_at)}</td>
+          <td style="color:var(--faint);font-size:11.5px">${cursor}</td>
         </tr>`;
       }).join('')}</tbody>
     </table></div>`}`;
@@ -1041,11 +1103,22 @@ function pollRun(runId,name,btn){
 }
 
 function showRunResult(name,r){
-  if(!r){ toast(name+' — natija yo\'q','err'); return; }
-  const rows=Object.entries(r.row_counts||{}).map(([t,n])=>t+': '+n).join(', ')||((r.total_rows||0)+' qator');
-  if(r.success&&r.quality_passed) toast('✓ '+name+' — '+rows,'ok');
-  else if(r.success) toast('Yuklandi, quality ogohlantirish: '+name,'err');
-  else toast('Xato: '+name+(r.error?' — '+r.error:''),'err');
+  if(!r){ toast(name+" — natija yo'q",'err'); return; }
+  const rows=Object.entries(r.row_counts||{}).map(([t,n])=>t+': '+n).join(', ')||(fmtRows(r.total_rows)+' qator');
+  if(r.success&&r.quality_passed){
+    const speedInfo=r.rows_per_second>0?` · ${Math.round(r.rows_per_second).toLocaleString()} q/s`:'';
+    const rowInfo=(!r.is_first_run&&r.new_rows<r.total_rows)
+      ? `+${fmtRows(r.new_rows)} yangi (jami ${fmtRows(r.total_rows)})`
+      : rows;
+    toast(`✓ ${name} — ${rowInfo}${speedInfo}`,'ok');
+    if(r.schema_changes&&r.schema_changes.length>0){
+      setTimeout(()=>{ toast('Schema yangilandi: '+r.schema_changes.join(', '),'ok'); },500);
+    }
+  }else if(r.success){
+    toast('Yuklandi, quality ogohlantirish: '+name,'err');
+  }else{
+    toast('Xato: '+name+(r.error?' — '+r.error:''),'err');
+  }
 }
 
 async function delPipeline(name){

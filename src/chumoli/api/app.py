@@ -159,6 +159,11 @@ class RunResponse(BaseModel):
     duration_seconds: float = 0.0
     total_rows: int = 0
     rows_per_second: float = 0.0
+    new_rows: int = 0
+    col_counts: dict[str, int] = Field(default_factory=dict)
+    schema_changes: list[str] = Field(default_factory=list)
+    cursor_last_value: Any = None
+    is_first_run: bool = True
 
 
 # Background run jobs (in-memory; single uvicorn process). See review notes.
@@ -203,6 +208,11 @@ def _execute_run_job(job_id: str, name: str) -> None:
                 duration_seconds=result.duration_seconds,
                 total_rows=result.total_rows,
                 rows_per_second=result.rows_per_second,
+                new_rows=result.new_rows,
+                col_counts=result.col_counts,
+                schema_changes=result.schema_changes,
+                cursor_last_value=result.cursor_last_value,
+                is_first_run=result.is_first_run,
             )
         except Exception:
             log.exception("run_record_failed pipeline=%s job=%s", name, job_id)
@@ -216,6 +226,11 @@ def _execute_run_job(job_id: str, name: str) -> None:
             duration_seconds=result.duration_seconds,
             total_rows=result.total_rows,
             rows_per_second=round(result.rows_per_second, 1),
+            new_rows=result.new_rows,
+            col_counts=result.col_counts,
+            schema_changes=result.schema_changes,
+            cursor_last_value=result.cursor_last_value,
+            is_first_run=result.is_first_run,
         ).model_dump(mode="json")
     except PipelineAlreadyRunning as e:
         log.warning("pipeline_already_running pipeline=%s job=%s", name, job_id)
@@ -500,6 +515,11 @@ def list_pipelines() -> list[dict[str, Any]]:
                 "duration_seconds": last.get("duration_seconds", 0),
                 "total_rows": last.get("total_rows", 0),
                 "rows_per_second": last.get("rows_per_second", 0),
+                "new_rows": last.get("new_rows", 0),
+                "col_counts": last.get("col_counts") or {},
+                "schema_changes": last.get("schema_changes") or [],
+                "cursor_last_value": last.get("cursor_last_value"),
+                "is_first_run": last.get("is_first_run", True),
             }
             if last
             else None
@@ -650,6 +670,11 @@ def run_pipeline(name: str) -> RunResponse:
             duration_seconds=result.duration_seconds,
             total_rows=result.total_rows,
             rows_per_second=result.rows_per_second,
+            new_rows=result.new_rows,
+            col_counts=result.col_counts,
+            schema_changes=result.schema_changes,
+            cursor_last_value=result.cursor_last_value,
+            is_first_run=result.is_first_run,
         )
     except Exception:
         log.exception("run_record_failed pipeline=%s", result.pipeline_name)
@@ -662,6 +687,11 @@ def run_pipeline(name: str) -> RunResponse:
         duration_seconds=result.duration_seconds,
         total_rows=result.total_rows,
         rows_per_second=round(result.rows_per_second, 1),
+        new_rows=result.new_rows,
+        col_counts=result.col_counts,
+        schema_changes=result.schema_changes,
+        cursor_last_value=result.cursor_last_value,
+        is_first_run=result.is_first_run,
     )
 
 
@@ -678,6 +708,11 @@ def _record_and_demo_response(result: Any, duck_path: str, *, label: str) -> dic
             duration_seconds=result.duration_seconds,
             total_rows=result.total_rows,
             rows_per_second=result.rows_per_second,
+            new_rows=result.new_rows,
+            col_counts=result.col_counts,
+            schema_changes=result.schema_changes,
+            cursor_last_value=result.cursor_last_value,
+            is_first_run=result.is_first_run,
         )
     except Exception:
         log.exception("run_record_failed pipeline=%s trigger=demo", result.pipeline_name)

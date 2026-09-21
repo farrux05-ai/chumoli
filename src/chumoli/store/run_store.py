@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -29,11 +29,27 @@ CREATE TABLE IF NOT EXISTS runs (
     trigger TEXT NOT NULL DEFAULT 'manual',
     duration_seconds REAL NOT NULL DEFAULT 0,
     total_rows INTEGER NOT NULL DEFAULT 0,
-    rows_per_second REAL NOT NULL DEFAULT 0
+    rows_per_second REAL NOT NULL DEFAULT 0,
+    new_rows INTEGER NOT NULL DEFAULT 0,
+    col_counts_json TEXT NOT NULL DEFAULT '{}',
+    schema_changes_json TEXT NOT NULL DEFAULT '[]',
+    cursor_last_value TEXT,
+    is_first_run INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_runs_pipeline ON runs(pipeline_name);
 CREATE INDEX IF NOT EXISTS idx_runs_finished ON runs(finished_at DESC);
 """
+
+_EXTRA_COLUMNS: list[tuple[str, str]] = [
+    ("duration_seconds", "REAL NOT NULL DEFAULT 0"),
+    ("total_rows", "INTEGER NOT NULL DEFAULT 0"),
+    ("rows_per_second", "REAL NOT NULL DEFAULT 0"),
+    ("new_rows", "INTEGER NOT NULL DEFAULT 0"),
+    ("col_counts_json", "TEXT NOT NULL DEFAULT '{}'"),
+    ("schema_changes_json", "TEXT NOT NULL DEFAULT '[]'"),
+    ("cursor_last_value", "TEXT"),
+    ("is_first_run", "INTEGER NOT NULL DEFAULT 1"),
+]
 
 
 @dataclass
@@ -51,6 +67,11 @@ class RunRecord:
     duration_seconds: float = 0.0
     total_rows: int = 0
     rows_per_second: float = 0.0
+    new_rows: int = 0
+    col_counts: dict[str, int] = field(default_factory=dict)
+    schema_changes: list[str] = field(default_factory=list)
+    cursor_last_value: Any = None
+    is_first_run: bool = True
 
 
 class RunStore:
@@ -74,18 +95,9 @@ class RunStore:
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
             cols = {r[1] for r in conn.execute("PRAGMA table_info(runs)").fetchall()}
-            if "duration_seconds" not in cols:
-                conn.execute(
-                    "ALTER TABLE runs ADD COLUMN duration_seconds REAL NOT NULL DEFAULT 0"
-                )
-            if "total_rows" not in cols:
-                conn.execute(
-                    "ALTER TABLE runs ADD COLUMN total_rows INTEGER NOT NULL DEFAULT 0"
-                )
-            if "rows_per_second" not in cols:
-                conn.execute(
-                    "ALTER TABLE runs ADD COLUMN rows_per_second REAL NOT NULL DEFAULT 0"
-                )
+            for name, ddl in _EXTRA_COLUMNS:
+                if name not in cols:
+                    conn.execute(f"ALTER TABLE runs ADD COLUMN {name} {ddl}")
 
     def record(
         self,
@@ -102,6 +114,11 @@ class RunStore:
         duration_seconds: float = 0.0,
         total_rows: int | None = None,
         rows_per_second: float | None = None,
+        new_rows: int = 0,
+        col_counts: dict[str, int] | None = None,
+        schema_changes: list[str] | None = None,
+        cursor_last_value: Any = None,
+        is_first_run: bool = True,
     ) -> int:
         started = (started_at or datetime.now(UTC)).isoformat()
         finished = (finished_at or datetime.now(UTC)).isoformat()
@@ -110,6 +127,9 @@ class RunStore:
         rps = rows_per_second
         if rps is None:
             rps = (total / duration_seconds) if duration_seconds > 0 else 0.0
+        cursor_raw = (
+            json.dumps(cursor_last_value, default=str) if cursor_last_value is not None else None
+        )
         with self._connect() as conn:
             cur = conn.execute(
                 """
@@ -117,8 +137,10 @@ class RunStore:
                     pipeline_name, success, quality_passed,
                     row_counts_json, quality_details_json, error,
                     started_at, finished_at, trigger,
-                    duration_seconds, total_rows, rows_per_second
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    duration_seconds, total_rows, rows_per_second,
+                    new_rows, col_counts_json, schema_changes_json,
+                    cursor_last_value, is_first_run
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     pipeline_name,
@@ -133,6 +155,11 @@ class RunStore:
                     float(duration_seconds),
                     int(total),
                     float(rps),
+                    int(new_rows or 0),
+                    json.dumps(col_counts or {}),
+                    json.dumps(schema_changes or []),
+                    cursor_raw,
+                    1 if is_first_run else 0,
                 ),
             )
             return int(cur.lastrowid)
@@ -182,6 +209,17 @@ class RunStore:
         }
 
     @staticmethod
+    def _decode_cursor(raw: Any) -> Any:
+        if raw is None or raw == "":
+            return None
+        if not isinstance(raw, str):
+            return raw
+        try:
+            return json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            return raw
+
+    @staticmethod
     def _row_to_dict(r: sqlite3.Row) -> dict[str, Any]:
         keys = set(r.keys())
         return {
@@ -202,4 +240,17 @@ class RunStore:
             "rows_per_second": float(r["rows_per_second"] or 0)
             if "rows_per_second" in keys
             else 0.0,
+            "new_rows": int(r["new_rows"] or 0) if "new_rows" in keys else 0,
+            "col_counts": json.loads(r["col_counts_json"] or "{}")
+            if "col_counts_json" in keys
+            else {},
+            "schema_changes": json.loads(r["schema_changes_json"] or "[]")
+            if "schema_changes_json" in keys
+            else [],
+            "cursor_last_value": RunStore._decode_cursor(
+                r["cursor_last_value"] if "cursor_last_value" in keys else None
+            ),
+            "is_first_run": bool(r["is_first_run"])
+            if "is_first_run" in keys and r["is_first_run"] is not None
+            else True,
         }

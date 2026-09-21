@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any
 
@@ -36,6 +36,12 @@ class RunResult:
     row_counts: dict[str, int]
     quality_report: QualityReport
     duration_seconds: float = 0.0
+    # dlt last_trace / schema / state — never computed by hand
+    new_rows: int = 0
+    col_counts: dict[str, int] = field(default_factory=dict)
+    schema_changes: list[str] = field(default_factory=list)
+    cursor_last_value: Any = None
+    is_first_run: bool = True
 
     @property
     def success(self) -> bool:
@@ -152,6 +158,126 @@ def _set_run_step(name: str, step: str, **extra: Any) -> None:
         info.update(extra)
 
 
+def _as_mapping(obj: Any) -> dict[str, Any]:
+    if obj is None:
+        return {}
+    if isinstance(obj, dict):
+        return obj
+    if hasattr(obj, "items"):
+        try:
+            return dict(obj.items())
+        except Exception:
+            return {}
+    return {}
+
+
+def _items_count(tw: Any) -> int:
+    if tw is None:
+        return 0
+    if isinstance(tw, dict):
+        return int(tw.get("items_count") or 0)
+    return int(getattr(tw, "items_count", 0) or 0)
+
+
+def _jsonable_cursor(value: Any) -> Any:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            pass
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def _user_col_counts(pipeline: Any) -> dict[str, int]:
+    schema = getattr(pipeline, "default_schema", None)
+    tables = _as_mapping(getattr(schema, "tables", None))
+    out: dict[str, int] = {}
+    for tname, tdef in tables.items():
+        if str(tname).startswith("_dlt"):
+            continue
+        cols = _as_mapping(tdef.get("columns") if isinstance(tdef, dict) else getattr(tdef, "columns", None))
+        out[str(tname)] = len([c for c in cols if not str(c).startswith("_dlt")])
+    return out
+
+
+def extract_dlt_metrics(pipeline: Any, load_info: Any = None) -> dict[str, Any]:
+    """Read run metrics from dlt last_trace / schema / state. Never compute by hand.
+
+    Failures return empty defaults so a run is never blocked by metrics.
+    """
+    metrics: dict[str, Any] = {
+        "new_rows": 0,
+        "col_counts": {},
+        "schema_changes": [],
+        "cursor_last_value": None,
+        "is_first_run": True,
+    }
+    try:
+        t = getattr(pipeline, "last_trace", None)
+        steps = list(getattr(t, "steps", None) or [])
+        if t is not None and steps:
+            step0_info = getattr(steps[0], "step_info", None)
+            if step0_info is not None and hasattr(step0_info, "first_run"):
+                metrics["is_first_run"] = bool(step0_info.first_run)
+
+            extract_step = next((s for s in steps if getattr(s, "step", None) == "extract"), None)
+            if extract_step is not None:
+                info = getattr(extract_step, "step_info", None)
+                extract_metrics = _as_mapping(getattr(info, "metrics", None))
+                new_rows = 0
+                for metric_list in extract_metrics.values():
+                    for m in metric_list or []:
+                        table_metrics = (
+                            m.get("table_metrics", {})
+                            if isinstance(m, dict)
+                            else getattr(m, "table_metrics", None)
+                        )
+                        for table, tw in _as_mapping(table_metrics).items():
+                            if not str(table).startswith("_dlt"):
+                                new_rows += _items_count(tw)
+                metrics["new_rows"] = new_rows
+
+        metrics["col_counts"] = _user_col_counts(pipeline)
+
+        packages = list(getattr(load_info, "load_packages", None) or [])
+        if packages:
+            schema_update = _as_mapping(getattr(packages[0], "schema_update", None))
+            metrics["schema_changes"] = [
+                str(k) for k in schema_update if not str(k).startswith("_dlt")
+            ]
+
+        cursor_last_value = None
+        state = _as_mapping(getattr(pipeline, "state", None))
+        for source_data in _as_mapping(state.get("sources")).values():
+            resources = _as_mapping(
+                source_data.get("resources")
+                if isinstance(source_data, dict)
+                else getattr(source_data, "resources", None)
+            )
+            for res_data in resources.values():
+                incremental = _as_mapping(
+                    res_data.get("incremental")
+                    if isinstance(res_data, dict)
+                    else getattr(res_data, "incremental", None)
+                )
+                for col_state in incremental.values():
+                    last = (
+                        col_state.get("last_value")
+                        if isinstance(col_state, dict)
+                        else getattr(col_state, "last_value", None)
+                    )
+                    if last is not None:
+                        cursor_last_value = last
+        metrics["cursor_last_value"] = _jsonable_cursor(cursor_last_value)
+    except Exception:
+        log.warning("metrics_extraction_failed", exc_info=True)
+    return metrics
+
+
 def run_pipeline_by_name(name: str, store: ControlStore | None = None) -> RunResult:
     store = store or ControlStore()
     stored = store.load(name)
@@ -252,6 +378,8 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
     else:
         quality_report = QualityReport()
 
+    dlt_metrics = extract_dlt_metrics(pipeline, load_info)
+
     _set_run_step(name, "done", rows_so_far=sum(row_counts.values()))
     return RunResult(
         pipeline_name=stored.config.name,
@@ -259,6 +387,11 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
         row_counts=row_counts,
         quality_report=quality_report,
         duration_seconds=round(duration, 3),
+        new_rows=int(dlt_metrics.get("new_rows") or 0),
+        col_counts=dlt_metrics.get("col_counts") or {},
+        schema_changes=list(dlt_metrics.get("schema_changes") or []),
+        cursor_last_value=dlt_metrics.get("cursor_last_value"),
+        is_first_run=bool(dlt_metrics.get("is_first_run", True)),
     )
 
 
@@ -396,6 +529,15 @@ def sync_from_destination(name: str, store: ControlStore | None = None) -> dict[
         return {"status": "error", "detail": f"Sinxronlash xatosi: {e}"}
 
 
+def _preview_fqn(dest_key: str, dataset: str, table_name: str) -> str:
+    """Schema-qualified table name, dialect-aware (ClickHouse uses backticks)."""
+    ds = str(dataset).replace("`", "").replace('"', "")
+    tbl = str(table_name).replace("`", "").replace('"', "")
+    if dest_key == "clickhouse":
+        return f"`{ds}`.`{tbl}`"
+    return f'"{ds}"."{tbl}"'
+
+
 def get_preview_rows(
     name: str, store: ControlStore | None = None, limit: int = 10
 ) -> dict[str, Any]:
@@ -416,22 +558,19 @@ def get_preview_rows(
     pipeline = build_dlt_pipeline(stored.config)
     limit = max(1, min(int(limit), 100))
     dataset = stored.config.destination.dataset_name or "raw"
+    dest_key = stored.config.destination.connector
 
     try:
-        user_tables = [
-            t
-            for t in pipeline.default_schema.tables.keys()
-            if not t.startswith("_dlt")
-        ]
+        col_counts = _user_col_counts(pipeline)
+        user_tables = [t for t in col_counts if not t.startswith("_dlt")]
         if not user_tables:
-            return {"tables": {}, "error": "Hali hech qanday jadval yuklanmagan"}
+            return {"tables": {}, "col_counts": {}, "error": "Hali hech qanday jadval yuklanmagan"}
 
         result: dict[str, Any] = {}
         with pipeline.sql_client() as client:
             for table_name in user_tables[:3]:
                 try:
-                    # Schema-qualified name required for DuckDB / multi-dataset destinations
-                    fqn = f'"{dataset}"."{table_name}"'
+                    fqn = _preview_fqn(dest_key, dataset, table_name)
                     # LIMIT is an int we control (not user SQL) — portable across destinations
                     with client.execute_query(
                         f"SELECT * FROM {fqn} LIMIT {int(limit)}"
@@ -441,9 +580,9 @@ def get_preview_rows(
                     result[table_name] = {"columns": columns, "rows": rows}
                 except Exception as e:
                     result[table_name] = {"error": str(e), "columns": [], "rows": []}
-        return {"tables": result}
+        return {"tables": result, "col_counts": col_counts}
     except Exception as e:
-        return {"tables": {}, "error": str(e)}
+        return {"tables": {}, "col_counts": {}, "error": str(e)}
 
 
 def drop_resource(name: str, resource: str, store: ControlStore | None = None) -> dict[str, str]:

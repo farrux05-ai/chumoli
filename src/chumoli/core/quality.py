@@ -137,12 +137,19 @@ def run_quality_checks(
     """
     target_tables = [quality.table_name] if quality.table_name else tables_written
     report = QualityReport()
+    dest = _destination_name(pipeline)
 
     if quality.row_count_min is not None:
         for table in target_tables:
             report.outcomes.append(
                 _run_check_safely(
-                    "row_count", table, _check_row_count, pipeline, table, quality.row_count_min
+                    "row_count",
+                    table,
+                    _check_row_count,
+                    pipeline,
+                    table,
+                    quality.row_count_min,
+                    dest,
                 )
             )
 
@@ -151,7 +158,13 @@ def run_quality_checks(
             for column in quality.not_null_columns:
                 report.outcomes.append(
                     _run_check_safely(
-                        "not_null", f"{table}.{column}", _check_not_null, pipeline, table, column
+                        "not_null",
+                        f"{table}.{column}",
+                        _check_not_null,
+                        pipeline,
+                        table,
+                        column,
+                        dest,
                     )
                 )
 
@@ -165,6 +178,7 @@ def run_quality_checks(
                     pipeline,
                     table,
                     quality.no_duplicates_key,
+                    dest,
                 )
             )
 
@@ -179,14 +193,49 @@ def run_quality_checks(
                     table,
                     quality.freshness_column,
                     quality.freshness_max_minutes,
+                    dest,
                 )
             )
 
     return report
 
 
-def _check_row_count(pipeline: dlt.Pipeline, table: str, minimum: int) -> CheckOutcome:
-    count = _scalar(pipeline, f"SELECT COUNT(*) FROM {_quote(table)}")
+def _destination_name(pipeline: dlt.Pipeline) -> str:
+    dest = getattr(pipeline, "destination", None)
+    name = getattr(dest, "destination_name", None) or getattr(dest, "name", "") or ""
+    return str(name).lower()
+
+
+def _quote(identifier: str, dest: str = "") -> str:
+    """Minimal identifier quoting to avoid breaking on reserved words or mixed case.
+
+    Not a defense against SQL injection — `identifier` values here
+    come from PipelineConfig (table/column names the pipeline owner
+    configured), never from external/untrusted data. If this
+    function is ever fed a value from outside the trusted config
+    chain, that call site needs its own validation first.
+    """
+    cleaned = str(identifier).replace("`", "").replace('"', "")
+    if dest == "clickhouse":
+        return f"`{cleaned}`"
+    return f'"{cleaned}"'
+
+
+def freshness_age_sql(table: str, timestamp_column: str, dest: str = "") -> str:
+    """Age of newest row in minutes. DuckDB/Postgres vs ClickHouse dialects."""
+    tbl = _quote(table, dest)
+    col = _quote(timestamp_column, dest)
+    if dest == "clickhouse":
+        return f"SELECT dateDiff('minute', max({col}), now()) FROM {tbl}"
+    return (
+        f"SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - MAX({col}))) / 60 FROM {tbl}"
+    )
+
+
+def _check_row_count(
+    pipeline: dlt.Pipeline, table: str, minimum: int, dest: str = ""
+) -> CheckOutcome:
+    count = _scalar(pipeline, f"SELECT COUNT(*) FROM {_quote(table, dest)}")
     passed = count >= minimum
     detail = (
         f"{table}: {count} qator (kamida {minimum} kutilgan)"
@@ -196,9 +245,12 @@ def _check_row_count(pipeline: dlt.Pipeline, table: str, minimum: int) -> CheckO
     return CheckOutcome(check_name="row_count", table_name=table, passed=passed, detail=detail)
 
 
-def _check_not_null(pipeline: dlt.Pipeline, table: str, column: str) -> CheckOutcome:
+def _check_not_null(
+    pipeline: dlt.Pipeline, table: str, column: str, dest: str = ""
+) -> CheckOutcome:
     null_count = _scalar(
-        pipeline, f"SELECT COUNT(*) FROM {_quote(table)} WHERE {_quote(column)} IS NULL"
+        pipeline,
+        f"SELECT COUNT(*) FROM {_quote(table, dest)} WHERE {_quote(column, dest)} IS NULL",
     )
     passed = null_count == 0
     detail = (
@@ -211,14 +263,16 @@ def _check_not_null(pipeline: dlt.Pipeline, table: str, column: str) -> CheckOut
     )
 
 
-def _check_no_duplicates(pipeline: dlt.Pipeline, table: str, key_column: str) -> CheckOutcome:
+def _check_no_duplicates(
+    pipeline: dlt.Pipeline, table: str, key_column: str, dest: str = ""
+) -> CheckOutcome:
     duplicate_count = _scalar(
         pipeline,
         f"""
         SELECT COUNT(*) FROM (
-            SELECT {_quote(key_column)}
-            FROM {_quote(table)}
-            GROUP BY {_quote(key_column)}
+            SELECT {_quote(key_column, dest)}
+            FROM {_quote(table, dest)}
+            GROUP BY {_quote(key_column, dest)}
             HAVING COUNT(*) > 1
         ) AS dupes
         """,
@@ -235,21 +289,13 @@ def _check_no_duplicates(pipeline: dlt.Pipeline, table: str, key_column: str) ->
 
 
 def _check_freshness(
-    pipeline: dlt.Pipeline, table: str, timestamp_column: str, max_minutes: int
+    pipeline: dlt.Pipeline,
+    table: str,
+    timestamp_column: str,
+    max_minutes: int,
+    dest: str = "",
 ) -> CheckOutcome:
-    # NOTE ON PORTABILITY: this uses DuckDB/Postgres-compatible
-    # EXTRACT(EPOCH FROM ...) arithmetic, which both dialects
-    # support. If a future destination doesn't (e.g. ClickHouse uses
-    # different date-diff syntax), this function is the single place
-    # to add a per-dialect branch — kept isolated here rather than
-    # spread across callers.
-    age_minutes = _scalar(
-        pipeline,
-        f"""
-        SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - MAX({_quote(timestamp_column)}))) / 60
-        FROM {_quote(table)}
-        """,
-    )
+    age_minutes = _scalar(pipeline, freshness_age_sql(table, timestamp_column, dest))
     if age_minutes is None:
         return CheckOutcome(
             check_name="freshness",
@@ -281,15 +327,3 @@ def _scalar(pipeline: dlt.Pipeline, sql: str) -> Any:
         with client.execute_query(sql) as cursor:
             row = cursor.fetchone()
             return row[0] if row else None
-
-
-def _quote(identifier: str) -> str:
-    """Minimal identifier quoting to avoid breaking on reserved words or mixed case.
-
-    Not a defense against SQL injection — `identifier` values here
-    come from PipelineConfig (table/column names the pipeline owner
-    configured), never from external/untrusted data. If this
-    function is ever fed a value from outside the trusted config
-    chain, that call site needs its own validation first.
-    """
-    return f'"{identifier}"'
