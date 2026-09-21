@@ -164,6 +164,7 @@ class RunResponse(BaseModel):
     schema_changes: list[str] = Field(default_factory=list)
     cursor_last_value: Any = None
     is_first_run: bool = True
+    peak_memory_mb: float = 0.0
 
 
 # Background run jobs (in-memory; single uvicorn process). See review notes.
@@ -213,6 +214,7 @@ def _execute_run_job(job_id: str, name: str) -> None:
                 schema_changes=result.schema_changes,
                 cursor_last_value=result.cursor_last_value,
                 is_first_run=result.is_first_run,
+                peak_memory_mb=result.peak_memory_mb,
             )
         except Exception:
             log.exception("run_record_failed pipeline=%s job=%s", name, job_id)
@@ -231,6 +233,7 @@ def _execute_run_job(job_id: str, name: str) -> None:
             schema_changes=result.schema_changes,
             cursor_last_value=result.cursor_last_value,
             is_first_run=result.is_first_run,
+            peak_memory_mb=result.peak_memory_mb,
         ).model_dump(mode="json")
     except PipelineAlreadyRunning as e:
         log.warning("pipeline_already_running pipeline=%s job=%s", name, job_id)
@@ -675,6 +678,7 @@ def run_pipeline(name: str) -> RunResponse:
             schema_changes=result.schema_changes,
             cursor_last_value=result.cursor_last_value,
             is_first_run=result.is_first_run,
+            peak_memory_mb=result.peak_memory_mb,
         )
     except Exception:
         log.exception("run_record_failed pipeline=%s", result.pipeline_name)
@@ -692,6 +696,7 @@ def run_pipeline(name: str) -> RunResponse:
         schema_changes=result.schema_changes,
         cursor_last_value=result.cursor_last_value,
         is_first_run=result.is_first_run,
+        peak_memory_mb=result.peak_memory_mb,
     )
 
 
@@ -713,6 +718,7 @@ def _record_and_demo_response(result: Any, duck_path: str, *, label: str) -> dic
             schema_changes=result.schema_changes,
             cursor_last_value=result.cursor_last_value,
             is_first_run=result.is_first_run,
+            peak_memory_mb=result.peak_memory_mb,
         )
     except Exception:
         log.exception("run_record_failed pipeline=%s trigger=demo", result.pipeline_name)
