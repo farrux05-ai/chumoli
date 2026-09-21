@@ -202,6 +202,11 @@ def _default_executor(pipeline_name: str, trigger: str) -> None:
             duration_seconds=result.duration_seconds,
             total_rows=result.total_rows,
             rows_per_second=result.rows_per_second,
+            new_rows=result.new_rows,
+            col_counts=result.col_counts,
+            schema_changes=result.schema_changes,
+            cursor_last_value=result.cursor_last_value,
+            is_first_run=result.is_first_run,
         )
         log.info(
             "queue_run_ok name=%s trigger=%s rows=%s",

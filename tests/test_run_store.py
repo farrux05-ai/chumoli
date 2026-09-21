@@ -24,6 +24,8 @@ def test_record_and_list(tmp_path: Path) -> None:
     assert rows[0]["row_counts"] == {"t": 3}
     assert rows[0]["duration_seconds"] == 1.5
     assert rows[0]["total_rows"] == 3
+    assert rows[0]["new_rows"] == 0
+    assert rows[0]["is_first_run"] is True
     stats = store.stats()
     assert stats["total_runs"] == 1
     assert stats["success"] == 1

@@ -121,6 +121,9 @@ def test_full_flow_rest_api_to_duckdb(tmp_path, local_json_server, monkeypatch) 
     result = _execute(stored, connector)
 
     assert result.success, f"Pipeline muvaffaqiyatsiz tugadi: {result.load_info}"
+    assert result.new_rows >= 2
+    assert result.col_counts.get("items", 0) >= 2
+    assert result.is_first_run is True
 
     # --- 6. Natijani to'g'ridan-to'g'ri DuckDB'dan tekshirish — bu dlt ning
     # o'zi emas, BIZNING butun zanjirimiz to'g'ri ishlaganini isbotlaydi
