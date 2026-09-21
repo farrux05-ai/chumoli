@@ -353,10 +353,7 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
 
     # Stale pending packages from a previous failed load (e.g. _dlt_load_id
     # NOT NULL) block the next run — clear them before starting.
-    try:
-        pipeline.drop_pending_packages()
-    except Exception as e:
-        log.warning("drop_pending_packages_pre_run pipeline=%s: %s", name, e)
+    _clear_pending_packages(pipeline, name, reason="pre_run")
 
     peak_memory_mb = 0.0
     tracemalloc.start()
@@ -364,18 +361,16 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
         try:
             load_info = pipeline.run(source, **run_kwargs)
         except Exception as run_exc:
-            # Recover once from broken pending package / NULL _dlt_load_id
+            # Recover once from broken pending package / NULL _dlt_load_id /
+            # partially loaded packages that block every subsequent run.
             msg = str(run_exc)
-            if "_dlt_load_id" in msg or "Constraint Error" in msg or "NOT NULL constraint" in msg:
+            if _is_pending_or_constraint_error(msg):
                 log.warning(
-                    "load_constraint_retry pipeline=%s — dropping pending packages: %s",
+                    "load_constraint_retry pipeline=%s — clearing pending packages: %s",
                     name,
                     msg[:200],
                 )
-                try:
-                    pipeline.drop_pending_packages()
-                except Exception:
-                    log.exception("drop_pending_packages_retry_failed pipeline=%s", name)
+                _clear_pending_packages(pipeline, name, reason="retry", aggressive=True)
                 load_info = pipeline.run(source, **run_kwargs)
             else:
                 raise
@@ -543,11 +538,102 @@ def get_failed_jobs(name: str, store: ControlStore | None = None) -> list[dict[s
     return out
 
 
+def _is_pending_or_constraint_error(msg: str) -> bool:
+    """True when the failure is a stuck pending package or _dlt_load_id NOT NULL."""
+    needles = (
+        "_dlt_load_id",
+        "Constraint Error",
+        "NOT NULL constraint",
+        "pending package",
+        "LoadPackageAlreadyCompleted",
+        "partially loaded",
+        "Package with `load_id",
+    )
+    low = msg or ""
+    return any(n in low for n in needles)
+
+
+def _clear_pending_packages(
+    pipeline: Any,
+    name: str,
+    *,
+    reason: str = "manual",
+    aggressive: bool = False,
+) -> None:
+    """Abort/drop pending dlt packages; on failure, wipe load/normalized + load/new.
+
+    dlt 1.30 deprecates drop_pending_packages in favour of abort_packages. abort_packages
+    may itself call load() and fail on a corrupt package — in that case we fall back to
+    deleting the pending directories under the pipeline working dir.
+    """
+    import shutil
+    from pathlib import Path
+
+    cleared = False
+    # Prefer abort_packages (dlt >= 1.30); fall back to deprecated alias.
+    for method_name in ("abort_packages", "drop_pending_packages"):
+        fn = getattr(pipeline, method_name, None)
+        if not callable(fn):
+            continue
+        try:
+            if method_name == "drop_pending_packages":
+                fn(with_partial_loads=True)
+            else:
+                fn()
+            cleared = True
+            log.info(
+                "pending_cleared pipeline=%s method=%s reason=%s",
+                name,
+                method_name,
+                reason,
+            )
+            break
+        except Exception as e:
+            log.warning(
+                "pending_clear_failed pipeline=%s method=%s reason=%s: %s",
+                name,
+                method_name,
+                reason,
+                str(e)[:200],
+            )
+
+    if cleared and not aggressive:
+        return
+
+    # Aggressive / fallback: remove pending package dirs so the next extract is clean.
+    try:
+        working = Path(getattr(pipeline, "working_dir", "") or "")
+        if not working.is_dir():
+            return
+        for sub in ("load/normalized", "load/new", "normalize/normalized", "extract"):
+            target = working / sub
+            if not target.exists():
+                continue
+            for child in list(target.iterdir()):
+                try:
+                    if child.is_dir():
+                        shutil.rmtree(child, ignore_errors=True)
+                    else:
+                        child.unlink(missing_ok=True)
+                except Exception:
+                    log.exception(
+                        "pending_dir_wipe_failed pipeline=%s path=%s", name, child
+                    )
+            log.info(
+                "pending_dir_wiped pipeline=%s path=%s reason=%s",
+                name,
+                target,
+                reason,
+            )
+    except Exception:
+        log.exception("pending_aggressive_clear_failed pipeline=%s reason=%s", name, reason)
+
+
 def drop_pending_packages(name: str, store: ControlStore | None = None) -> dict[str, str]:
     _, stored = _load_stored(name, store)
     pipeline = build_dlt_pipeline(stored.config)
     try:
-        pipeline.drop_pending_packages()
+        _clear_pending_packages(pipeline, name, reason="api", aggressive=True)
         return {"status": "ok", "detail": "Pending paketlar o'chirildi"}
     except Exception as e:
         return {"status": "error", "detail": f"Pending paketlar o'chirilmadi: {e}"}
