@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+import tracemalloc
 from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any
@@ -36,6 +37,7 @@ class RunResult:
     row_counts: dict[str, int]
     quality_report: QualityReport
     duration_seconds: float = 0.0
+    peak_memory_mb: float = 0.0
     # dlt last_trace / schema / state — never computed by hand
     new_rows: int = 0
     col_counts: dict[str, int] = field(default_factory=dict)
@@ -349,7 +351,14 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
         else:
             os.environ.pop("NORMALIZE__DATA_WRITER__DISABLE_COMPRESSION", None)
 
-    load_info = pipeline.run(source, **run_kwargs)
+    peak_memory_mb = 0.0
+    tracemalloc.start()
+    try:
+        load_info = pipeline.run(source, **run_kwargs)
+        _, peak_mem = tracemalloc.get_traced_memory()
+        peak_memory_mb = round(peak_mem / 1024 / 1024, 1)
+    finally:
+        tracemalloc.stop()
     duration = perf_counter() - t0
 
     load_succeeded = not load_info.has_failed_jobs
@@ -387,6 +396,7 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
         row_counts=row_counts,
         quality_report=quality_report,
         duration_seconds=round(duration, 3),
+        peak_memory_mb=peak_memory_mb,
         new_rows=int(dlt_metrics.get("new_rows") or 0),
         col_counts=dlt_metrics.get("col_counts") or {},
         schema_changes=list(dlt_metrics.get("schema_changes") or []),
