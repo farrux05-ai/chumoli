@@ -1,7 +1,6 @@
 """chumoli.api.app — FastAPI: auth, pipelines, runs, scheduler, demo, recovery, async run."""
 from __future__ import annotations
 
-import logging
 import threading
 import os
 import re
@@ -17,6 +16,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
 from chumoli.connectors import register_builtin_connectors
+from chumoli.core.logging_setup import configure_logging
+import structlog
 from chumoli.connectors.base import registry
 from chumoli.core.config import (
     DestinationConfig,
@@ -54,7 +55,7 @@ from chumoli.store.run_store import RunStore
 
 register_builtin_connectors()
 
-log = logging.getLogger("chumoli.api")
+log = structlog.get_logger("chumoli.api")
 
 
 def _cors_origins() -> list[str]:
@@ -119,6 +120,7 @@ async def require_api_key(request: Request) -> None:
 
 @app.on_event("startup")
 def _startup() -> None:
+    configure_logging()
     _get_api_key()
     try:
         start_scheduler()
@@ -217,7 +219,7 @@ def _execute_run_job(job_id: str, name: str) -> None:
                 peak_memory_mb=result.peak_memory_mb,
             )
         except Exception:
-            log.exception("run_record_failed pipeline=%s job=%s", name, job_id)
+            log.exception("run_record_failed", pipeline=name, job=job_id)
         job["status"] = "done"
         job["result"] = RunResponse(
             pipeline_name=result.pipeline_name,
@@ -236,11 +238,11 @@ def _execute_run_job(job_id: str, name: str) -> None:
             peak_memory_mb=result.peak_memory_mb,
         ).model_dump(mode="json")
     except PipelineAlreadyRunning as e:
-        log.warning("pipeline_already_running pipeline=%s job=%s", name, job_id)
+        log.warning("pipeline_already_running", pipeline=name, job=job_id)
         job["status"] = "error"
         job["error"] = str(e)
     except Exception as e:
-        log.exception("run_job_failed pipeline=%s job=%s", name, job_id)
+        log.exception("run_job_failed", pipeline=name, job=job_id)
         job["status"] = "error"
         try:
             from chumoli.core.demo_data import friendly_db_error
@@ -635,7 +637,7 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
     try:
         reload_jobs()
     except Exception:
-        log.exception("scheduler_reload_failed after create name=%s", config.name)
+        log.exception("scheduler_reload_failed", action="create", pipeline=config.name)
     return {"status": "created", "name": config.name}
 
 
@@ -645,7 +647,7 @@ def delete_pipeline(name: str) -> dict[str, str]:
     try:
         reload_jobs()
     except Exception:
-        log.exception("scheduler_reload_failed after delete name=%s", name)
+        log.exception("scheduler_reload_failed", action="delete", pipeline=name)
     return {"status": "deleted", "name": name}
 
 
@@ -681,7 +683,7 @@ def run_pipeline(name: str) -> RunResponse:
             peak_memory_mb=result.peak_memory_mb,
         )
     except Exception:
-        log.exception("run_record_failed pipeline=%s", result.pipeline_name)
+        log.exception("run_record_failed", pipeline=result.pipeline_name)
     return RunResponse(
         pipeline_name=result.pipeline_name,
         success=result.success,
@@ -721,7 +723,7 @@ def _record_and_demo_response(result: Any, duck_path: str, *, label: str) -> dic
             peak_memory_mb=result.peak_memory_mb,
         )
     except Exception:
-        log.exception("run_record_failed pipeline=%s trigger=demo", result.pipeline_name)
+        log.exception("run_record_failed", pipeline=result.pipeline_name, trigger="demo")
     return {
         "pipeline_name": result.pipeline_name,
         "success": result.success,

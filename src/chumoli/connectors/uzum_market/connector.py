@@ -15,7 +15,6 @@ Fix'lar (v1):
 
 from __future__ import annotations
 
-import time
 from collections.abc import Iterator
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -23,6 +22,7 @@ from typing import Any
 import dlt
 import httpx
 
+from chumoli.core.retry_policy import uz_api_retry
 from chumoli.core.manifest import (
     ConnectorCategory,
     ConnectorManifest,
@@ -33,8 +33,6 @@ from chumoli.core.manifest import (
 
 UZUM_BASE_URL     = "https://api-seller.uzum.uz/api"
 UZUM_PAGE_SIZE    = 100
-UZUM_RETRY_DELAYS = [1.0, 3.0, 10.0]
-
 
 MANIFEST = ConnectorManifest(
     key="uzum_market",
@@ -63,23 +61,11 @@ MANIFEST = ConnectorManifest(
 )
 
 
+@uz_api_retry
 def _get(client: httpx.Client, path: str, params: dict[str, Any] | None = None) -> Any:
-    last_exc: Exception | None = None
-    for delay in UZUM_RETRY_DELAYS:
-        try:
-            resp = client.get(path, params=params)
-            resp.raise_for_status()
-            return resp.json()
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429 or e.response.status_code >= 500:
-                time.sleep(delay)
-                last_exc = e
-            else:
-                raise
-        except (httpx.ConnectError, httpx.TimeoutException) as e:
-            time.sleep(delay)
-            last_exc = e
-    raise RuntimeError("Uzum API failed after retries") from last_exc
+    resp = client.get(path, params=params)
+    resp.raise_for_status()
+    return resp.json()
 
 
 def _extract_orders(data: Any) -> list:

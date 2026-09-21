@@ -62,8 +62,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import dlt
+import structlog
 
 from chumoli.core.config import QualityConfig
+
+log = structlog.get_logger("chumoli.quality")
 
 
 @dataclass
@@ -241,6 +244,14 @@ def _check_row_count(
         f"{table}: {count} qator (kamida {minimum} kutilgan)"
         if passed
         else f"{table}: faqat {count} qator yuklandi, kamida {minimum} kerak edi"
+    )
+    log.info(
+        "quality_check",
+        check="row_count",
+        table=table,
+        count=count,
+        minimum=minimum,
+        passed=passed,
     )
     return CheckOutcome(check_name="row_count", table_name=table, passed=passed, detail=detail)
 

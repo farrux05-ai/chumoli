@@ -24,6 +24,8 @@ qaror emas.
 from __future__ import annotations
 
 import typer
+
+from chumoli.core.logging_setup import configure_logging
 from rich.console import Console
 from rich.table import Table
 
@@ -178,6 +180,7 @@ def ui(
 
 
 def main() -> None:
+    configure_logging()
     app()
 
 

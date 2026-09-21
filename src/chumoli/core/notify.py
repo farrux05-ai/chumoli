@@ -8,12 +8,12 @@ Failures here must never fail the pipeline itself.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 import httpx
 
-log = logging.getLogger("chumoli.notify")
+log = structlog.get_logger("chumoli.notify")
 
 TELEGRAM_BOT_TOKEN_KEY = "telegram_bot_token"
 
@@ -139,7 +139,7 @@ def maybe_notify_run(
             if not token:
                 token = store.get_setting(TELEGRAM_BOT_TOKEN_KEY)
         if not token:
-            log.debug("telegram_bot_token not set; skip notify")
+            log.debug("telegram_bot_token_missing")
             return
         text = format_run_message(
             pipeline_name=pipeline_name,
@@ -152,4 +152,4 @@ def maybe_notify_run(
         )
         send_telegram(str(chat_id), token, text)
     except Exception:
-        log.exception("telegram_notify_failed pipeline=%s", pipeline_name)
+        log.exception("telegram_notify_failed", pipeline=pipeline_name)

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-log = logging.getLogger("chumoli.row_counts")
+log = structlog.get_logger("chumoli.row_counts")
 
 
 def row_counts_from_trace(pipeline: Any) -> dict[str, int]:
@@ -22,8 +22,8 @@ def row_counts_from_trace(pipeline: Any) -> dict[str, int]:
             }
     except Exception:
         log.exception(
-            "row_counts_from_trace_failed pipeline=%s",
-            getattr(pipeline, "pipeline_name", "?"),
+            "row_counts_from_trace_failed",
+            pipeline=getattr(pipeline, "pipeline_name", "?"),
         )
     return {}
 
@@ -85,9 +85,9 @@ def get_row_counts(
                 counts[table_name] = int(result[0][0])
     except Exception:
         log.exception(
-            "row_counts_sql_failed pipeline=%s dest=%s — falling back",
-            getattr(pipeline, "pipeline_name", "?"),
-            dest_key,
+            "row_counts_sql_failed",
+            pipeline=getattr(pipeline, "pipeline_name", "?"),
+            dest=dest_key,
         )
         fallback = row_counts_from_load_packages(load_info)
         if fallback:

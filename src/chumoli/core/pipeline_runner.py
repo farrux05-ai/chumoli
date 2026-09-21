@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import logging
+import uuid
 import threading
 import time
 import tracemalloc
@@ -11,6 +11,7 @@ from time import perf_counter
 from typing import Any
 
 import dlt
+import structlog
 
 from chumoli.connectors.base import BaseUZConnector, registry
 from chumoli.core.config import PipelineConfig
@@ -18,7 +19,7 @@ from chumoli.core.quality import QualityReport, run_quality_checks
 from chumoli.core.row_counts import get_row_counts
 from chumoli.store.control_store import ControlStore, StoredPipeline
 
-log = logging.getLogger("chumoli.pipeline_runner")
+log = structlog.get_logger("chumoli.pipeline_runner")
 
 # Parallel run guard: same pipeline_name + concurrent dlt.run → LoadPackageNotFound
 # (dlt working dir shared). One in-process run per name at a time.
@@ -286,8 +287,13 @@ def run_pipeline_by_name(name: str, store: ControlStore | None = None) -> RunRes
     if stored is None:
         raise KeyError(f"Pipeline '{name}' topilmadi")
 
+    run_id = uuid.uuid4().hex[:12]
+    structlog.contextvars.bind_contextvars(pipeline=name, run_id=run_id)
+    log.info("pipeline_run_start", connector=stored.config.connector_key)
+
     with _RUNNING_LOCK:
         if name in _RUNNING_PIPELINES:
+            structlog.contextvars.clear_contextvars()
             raise PipelineAlreadyRunning(
                 f"Pipeline '{name}' hozir ishga tushgan. "
                 "Tugaguncha kuting — parallel run dlt holatini buzadi."
@@ -295,44 +301,54 @@ def run_pipeline_by_name(name: str, store: ControlStore | None = None) -> RunRes
         _RUNNING_PIPELINES[name] = {
             "started_at": time.time(),
             "step": "starting",
+            "run_id": run_id,
             "rows_so_far": 0,
         }
 
     try:
         connector = registry.get(stored.config.connector_key)
         result = _execute(stored, connector)
+        log.info(
+            "pipeline_run_done",
+            success=result.success,
+            total_rows=result.total_rows,
+            duration_seconds=result.duration_seconds,
+            rows_per_second=round(result.rows_per_second, 1),
+        )
+        try:
+            from chumoli.core.notify import maybe_notify_run
+
+            maybe_notify_run(
+                store=store,
+                notify_cfg=stored.config.notify,
+                pipeline_name=result.pipeline_name,
+                success=result.success,
+                quality_passed=result.quality_report.all_passed,
+                row_counts=result.row_counts,
+                quality_details=[
+                    {"passed": o.passed, "detail": o.detail}
+                    for o in result.quality_report.outcomes
+                ],
+                duration_seconds=result.duration_seconds,
+            )
+        except Exception:
+            log.exception("notify_failed", pipeline=name)
+        return result
     finally:
         with _RUNNING_LOCK:
             _RUNNING_PIPELINES.pop(name, None)
-
-    try:
-        from chumoli.core.notify import maybe_notify_run
-
-        maybe_notify_run(
-            store=store,
-            notify_cfg=stored.config.notify,
-            pipeline_name=result.pipeline_name,
-            success=result.success,
-            quality_passed=result.quality_report.all_passed,
-            row_counts=result.row_counts,
-            quality_details=[
-                {"passed": o.passed, "detail": o.detail}
-                for o in result.quality_report.outcomes
-            ],
-            duration_seconds=result.duration_seconds,
-        )
-    except Exception:
-        log.exception("notify_failed pipeline=%s", name)
-    return result
+        structlog.contextvars.clear_contextvars()
 
 
 def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
     name = stored.config.name
+    log.info("step_extract_start")
     _set_run_step(name, "extract")
     source = connector.build_dlt_source(stored.config.source_params, stored.secrets)
     pipeline = build_dlt_pipeline(stored.config)
 
     t0 = perf_counter()
+    log.info("step_load_start")
     _set_run_step(name, "run")
     run_kwargs: dict[str, Any] = {
         "write_disposition": stored.config.write_disposition.value,
@@ -366,9 +382,8 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
             msg = str(run_exc)
             if _is_pending_or_constraint_error(msg):
                 log.warning(
-                    "load_constraint_retry pipeline=%s — clearing pending packages: %s",
-                    name,
-                    msg[:200],
+                    "load_constraint_retry",
+                    detail=msg[:200],
                 )
                 _clear_pending_packages(pipeline, name, reason="retry", aggressive=True)
                 load_info = pipeline.run(source, **run_kwargs)
@@ -379,6 +394,12 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
     finally:
         tracemalloc.stop()
     duration = perf_counter() - t0
+
+    log.info(
+        "step_load_done",
+        has_failed_jobs=load_info.has_failed_jobs,
+        duration_seconds=round(duration, 3),
+    )
 
     load_succeeded = not load_info.has_failed_jobs
     _set_run_step(name, "count" if load_succeeded else "failed")
@@ -395,6 +416,7 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
         _set_run_step(name, "count", rows_so_far=sum(row_counts.values()))
 
     if load_succeeded:
+        log.info("step_quality_start", tables=list(row_counts.keys()))
         _set_run_step(name, "quality")
         # Filesystem (CSV/Parquet files) — SQL quality checks don't apply reliably
         if dest.connector == "filesystem":
@@ -403,6 +425,13 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
             quality_report = run_quality_checks(
                 pipeline, stored.config.quality, tables_written=list(row_counts.keys())
             )
+        log.info(
+            "step_quality_done",
+            all_passed=quality_report.all_passed,
+            failures=[
+                o.detail for o in quality_report.outcomes if not o.passed
+            ],
+        )
     else:
         quality_report = QualityReport()
 
@@ -510,10 +539,10 @@ def get_failed_jobs(name: str, store: ControlStore | None = None) -> list[dict[s
                     try:
                         jobs = fn(lid)
                     except TypeError as e:
-                        log.warning("failed_jobs_lookup_unsupported: %s", e)
+                        log.warning("failed_jobs_lookup_unsupported", error=str(e))
                         break
                     except Exception as e:
-                        log.warning("failed_jobs_lookup_error: %s", e)
+                        log.warning("failed_jobs_lookup_error", error=str(e))
                         continue
                     if not jobs:
                         continue
@@ -525,7 +554,7 @@ def get_failed_jobs(name: str, store: ControlStore | None = None) -> list[dict[s
                             }
                         )
     except Exception as e:
-        log.warning("get_failed_jobs_error: %s", e)
+        log.warning("get_failed_jobs_error", error=str(e))
         out.append({"job": "error", "detail": f"Failed jobs o'qib bo'lmadi: {e}"})
 
     if not out:
@@ -582,19 +611,17 @@ def _clear_pending_packages(
                 fn()
             cleared = True
             log.info(
-                "pending_cleared pipeline=%s method=%s reason=%s",
-                name,
-                method_name,
-                reason,
+                "pending_cleared",
+                method=method_name,
+                reason=reason,
             )
             break
         except Exception as e:
             log.warning(
-                "pending_clear_failed pipeline=%s method=%s reason=%s: %s",
-                name,
-                method_name,
-                reason,
-                str(e)[:200],
+                "pending_clear_failed",
+                method=method_name,
+                reason=reason,
+                error=str(e)[:200],
             )
 
     if cleared and not aggressive:
@@ -617,16 +644,15 @@ def _clear_pending_packages(
                         child.unlink(missing_ok=True)
                 except Exception:
                     log.exception(
-                        "pending_dir_wipe_failed pipeline=%s path=%s", name, child
+                        "pending_dir_wipe_failed", path=str(child)
                     )
             log.info(
-                "pending_dir_wiped pipeline=%s path=%s reason=%s",
-                name,
-                target,
-                reason,
+                "pending_dir_wiped",
+                path=str(target),
+                reason=reason,
             )
     except Exception:
-        log.exception("pending_aggressive_clear_failed pipeline=%s reason=%s", name, reason)
+        log.exception("pending_aggressive_clear_failed", reason=reason)
 
 
 def drop_pending_packages(name: str, store: ControlStore | None = None) -> dict[str, str]:

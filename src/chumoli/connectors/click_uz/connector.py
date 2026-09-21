@@ -17,7 +17,6 @@ Fix'lar (v1):
 from __future__ import annotations
 
 import hashlib
-import time
 from collections.abc import Iterator
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -25,6 +24,7 @@ from typing import Any
 import dlt
 import httpx
 
+from chumoli.core.retry_policy import uz_api_retry
 from chumoli.core.manifest import (
     ConnectorCategory,
     ConnectorManifest,
@@ -35,8 +35,6 @@ from chumoli.core.manifest import (
 
 CLICK_BASE_URL    = "https://api.click.uz/v2/merchant"
 CLICK_PAGE_SIZE   = 100
-CLICK_RETRY_DELAYS = [1.0, 3.0, 10.0]
-
 
 MANIFEST = ConnectorManifest(
     key="click_uz",
@@ -83,6 +81,7 @@ def _build_auth_header(
     return f"{service_id}:{digest}:{ts}"
 
 
+@uz_api_retry
 def _get(
     client: httpx.Client,
     path: str,
@@ -90,32 +89,19 @@ def _get(
     secret_key: str,
     params: dict[str, Any] | None = None,
 ) -> Any:
-    last_exc: Exception | None = None
-    for delay in CLICK_RETRY_DELAYS:
-        try:
-            headers = {
-                "Auth": _build_auth_header(service_id, secret_key)
-            }
-            resp = client.get(path, params=params, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+    headers = {
+        "Auth": _build_auth_header(service_id, secret_key)
+    }
+    resp = client.get(path, params=params, headers=headers)
+    resp.raise_for_status()
+    data = resp.json()
 
-            # FIX: Click error field tekshirish (eski kodda yo'q edi)
-            if isinstance(data, dict) and data.get("error") not in (None, 0, ""):
-                err_note = data.get("error_note") or data.get("error")
-                raise ValueError(f"Click API xato [{data.get('error')}]: {err_note}")
+    # FIX: Click error field tekshirish (eski kodda yo'q edi)
+    if isinstance(data, dict) and data.get("error") not in (None, 0, ""):
+        err_note = data.get("error_note") or data.get("error")
+        raise ValueError(f"Click API xato [{data.get('error')}]: {err_note}")
 
-            return data
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429 or e.response.status_code >= 500:
-                time.sleep(delay)
-                last_exc = e
-            else:
-                raise
-        except (httpx.ConnectError, httpx.TimeoutException) as e:
-            time.sleep(delay)
-            last_exc = e
-    raise RuntimeError("Click API failed after retries") from last_exc
+    return data
 
 
 def _extract_payments(data: Any) -> list:

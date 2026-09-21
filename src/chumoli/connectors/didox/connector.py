@@ -36,6 +36,7 @@ from typing import Any
 import dlt
 import httpx
 
+from chumoli.core.retry_policy import uz_api_retry
 from chumoli.core.manifest import (
     ConnectorCategory,
     ConnectorManifest,
@@ -46,8 +47,6 @@ from chumoli.core.manifest import (
 
 DIDOX_BASE_URL     = "https://api.didox.uz"
 DIDOX_PAGE_SIZE    = 50
-DIDOX_RETRY_DELAYS = [2.0, 5.0, 15.0]
-
 # Hujjat turlari (Didox API qiymatlari)
 DOC_TYPE_MAP = {
     "INVOICE":  "faktura",
@@ -177,27 +176,20 @@ def _get_page(
         params["direction"] = "INCOMING"
     # "all" = filter yo'q
 
-    last_exc: Exception | None = None
-    for delay in DIDOX_RETRY_DELAYS:
+    @uz_api_retry
+    def _do() -> dict[str, Any]:
+        resp = client.get("/api/v1/docs", params=params)
         try:
-            resp = client.get("/api/v1/docs", params=params)
             resp.raise_for_status()
-            return resp.json()
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
-                # Token muddati o'tgan - run qayta boshlash kerak
                 raise ValueError(
                     "Didox token muddati tugadi. Pipeline'ni qayta ishga tushiring."
                 ) from e
-            if e.response.status_code == 429 or e.response.status_code >= 500:
-                time.sleep(delay)
-                last_exc = e
-            else:
-                raise
-        except (httpx.ConnectError, httpx.TimeoutException) as e:
-            time.sleep(delay)
-            last_exc = e
-    raise RuntimeError("Didox API failed after retries") from last_exc
+            raise
+        return resp.json()
+
+    return _do()
 
 
 def _extract_content(data: Any) -> list:

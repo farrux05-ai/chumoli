@@ -15,7 +15,6 @@ Fix'lar (v1):
 from __future__ import annotations
 
 import base64
-import time
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -24,6 +23,7 @@ from typing import Any
 import dlt
 import httpx
 
+from chumoli.core.retry_policy import uz_api_retry
 from chumoli.core.manifest import (
     ConnectorCategory,
     ConnectorManifest,
@@ -35,8 +35,6 @@ from chumoli.core.manifest import (
 PAYME_API_URL     = "https://checkout.paycom.uz/api"
 PAYME_SANDBOX_URL = "https://checkout.test.paycom.uz/api"
 PAYME_PAGE_SIZE   = 50
-PAYME_RETRY_DELAYS = [2.0, 5.0, 15.0]   # FIX: eski [1.0, 2.0, 5.0] dan kuchliroq
-
 TZ_TASHKENT = ZoneInfo("Asia/Tashkent")
 
 
@@ -110,6 +108,7 @@ def _from_ms(ms: int) -> datetime:
     return datetime.fromtimestamp(ms / 1000, tz=UTC)
 
 
+@uz_api_retry
 def _jsonrpc(
     client: httpx.Client,
     url: str,
@@ -118,35 +117,22 @@ def _jsonrpc(
     auth_header: str,
     req_id: int = 1,
 ) -> dict[str, Any]:
-    last_exc: Exception | None = None
-    for delay in PAYME_RETRY_DELAYS:
-        try:
-            resp = client.post(
-                url,
-                json={"id": req_id, "method": method, "params": params},
-                headers={
-                    "X-Auth": auth_header,
-                    "Content-Type": "application/json",
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            if data.get("error"):
-                err = data["error"]
-                raise ValueError(
-                    f"Payme API [{err.get('code', '?')}]: {err.get('message', 'unknown')}"
-                )
-            return data.get("result") or {}
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code in (429,) or e.response.status_code >= 500:
-                time.sleep(delay)
-                last_exc = e
-            else:
-                raise
-        except (httpx.ConnectError, httpx.TimeoutException) as e:
-            time.sleep(delay)
-            last_exc = e
-    raise RuntimeError("Payme API failed after retries") from last_exc
+    resp = client.post(
+        url,
+        json={"id": req_id, "method": method, "params": params},
+        headers={
+            "X-Auth": auth_header,
+            "Content-Type": "application/json",
+        },
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get("error"):
+        err = data["error"]
+        raise ValueError(
+            f"Payme API [{err.get('code', '?')}]: {err.get('message', 'unknown')}"
+        )
+    return data.get("result") or {}
 
 
 def _fetch_day(

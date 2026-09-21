@@ -13,7 +13,7 @@ ko'p job birga o'qsa ham process qulamasin.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from typing import Any
 
@@ -22,7 +22,7 @@ from chumoli.core.config import ScheduleKind
 from chumoli.core.run_queue import get_run_queue
 from chumoli.store.control_store import ControlStore
 
-log = logging.getLogger("chumoli.scheduler")
+log = structlog.get_logger("chumoli.scheduler")
 
 _lock = threading.RLock()
 _scheduler: Any = None
@@ -74,20 +74,20 @@ def _add_jobs_from_store(scheduler: Any, store: ControlStore) -> None:
                 max_instances=1,
                 coalesce=True,
             )
-            log.info("scheduled interval name=%s every=%sm", name, minutes)
+            log.info("scheduled_interval", pipeline=name, every_minutes=minutes)
 
         elif kind == ScheduleKind.DAILY_AT.value:
             raw_time = sched.get("daily_at_time") or ""
             try:
                 hour, minute = _parse_hhmm(raw_time)
             except Exception:
-                log.warning("skip daily_at bad time name=%s time=%r", name, raw_time)
+                log.warning("skip_daily_at_bad_time", pipeline=name, time=raw_time)
                 continue
             tz = (sched.get("timezone") or DEFAULT_TZ).strip() or DEFAULT_TZ
             try:
                 trigger = CronTrigger(hour=hour, minute=minute, timezone=tz)
             except Exception:
-                log.exception("skip daily_at bad tz name=%s tz=%r", name, tz)
+                log.exception("skip_daily_at_bad_tz", pipeline=name, tz=tz)
                 continue
             scheduler.add_job(
                 _enqueue_job,
@@ -99,18 +99,15 @@ def _add_jobs_from_store(scheduler: Any, store: ControlStore) -> None:
                 coalesce=True,
             )
             log.info(
-                "scheduled daily_at name=%s time=%02d:%02d tz=%s",
-                name,
-                hour,
-                minute,
-                tz,
+                "scheduled_daily_at",
+                pipeline=name,
+                hour=hour,
+                minute=minute,
+                tz=str(tz),
             )
 
         elif kind == ScheduleKind.AIRFLOW.value:
-            log.info(
-                "skip airflow kind name=%s — ichki scheduler boshqarmaydi",
-                name,
-            )
+            log.info("skip_airflow_kind", pipeline=name)
 
 
 def start_scheduler() -> dict[str, Any]:

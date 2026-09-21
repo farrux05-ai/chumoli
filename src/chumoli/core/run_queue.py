@@ -15,7 +15,7 @@ Qoidalar:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 import threading
 import time
@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Callable
 
-log = logging.getLogger("chumoli.run_queue")
+log = structlog.get_logger("chumoli.run_queue")
 
 
 def _max_concurrent() -> int:
@@ -80,12 +80,12 @@ class RunQueue:
             self._q.append(QueueItem(pipeline_name=name, trigger=trigger))
             self._queued_names.add(name)
             log.info(
-                "enqueue name=%s trigger=%s queue_len=%s running=%s max=%s",
-                name,
-                trigger,
-                len(self._q),
-                len(self._running_names),
-                self._max,
+                "enqueue",
+                pipeline=name,
+                trigger=trigger,
+                queue_len=len(self._q),
+                running=len(self._running_names),
+                max_workers=self._max,
             )
 
         self._pump()
@@ -140,11 +140,11 @@ class RunQueue:
         trigger = item.trigger
         try:
             if self._executor is None:
-                log.error("run_queue executor not set name=%s", name)
+                log.error("run_queue_executor_missing", pipeline=name)
                 return
             self._executor(name, trigger)
         except Exception:
-            log.exception("run_queue_worker_failed name=%s trigger=%s", name, trigger)
+            log.exception("run_queue_worker_failed", pipeline=name, trigger=trigger)
         finally:
             with self._lock:
                 self._running_names.discard(name)
@@ -210,21 +210,21 @@ def _default_executor(pipeline_name: str, trigger: str) -> None:
             peak_memory_mb=result.peak_memory_mb,
         )
         log.info(
-            "queue_run_ok name=%s trigger=%s rows=%s",
-            pipeline_name,
-            trigger,
-            result.row_counts,
+            "queue_run_ok",
+            pipeline=pipeline_name,
+            trigger=trigger,
+            rows=result.row_counts,
         )
     except PipelineAlreadyRunning:
         # Concurrent manual /run won the lock — not a failure, just skip
         log.info(
-            "queue_skip_already_running name=%s trigger=%s — not recording failure",
-            pipeline_name,
-            trigger,
-        )
+            "queue_skip_already_running",
+            pipeline=pipeline_name,
+            trigger=trigger,
+        )  # not recording failure
         return
     except Exception as e:
-        log.exception("queue_run_failed name=%s", pipeline_name)
+        log.exception("queue_run_failed", pipeline=pipeline_name)
         runs.record(
             pipeline_name=pipeline_name,
             success=False,
