@@ -207,6 +207,7 @@ def _default_executor(pipeline_name: str, trigger: str) -> None:
             schema_changes=result.schema_changes,
             cursor_last_value=result.cursor_last_value,
             is_first_run=result.is_first_run,
+            peak_memory_mb=result.peak_memory_mb,
         )
         log.info(
             "queue_run_ok name=%s trigger=%s rows=%s",
