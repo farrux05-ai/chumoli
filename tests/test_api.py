@@ -334,3 +334,28 @@ def test_sql_inspect_endpoint(api, tmp_path) -> None:
         json={"connection_string": ""},
     )
     assert bad.status_code == 422
+
+
+def test_create_without_quality_does_not_inject_row_count_min(api) -> None:
+    """BUG 3: bo'sh quality sessiz row_count_min=1 qo'ymasligi kerak."""
+    c, key, _ = api
+    body = {
+        "name": "p_no_quality",
+        "connector_key": "rest_api",
+        "source_params": {
+            "base_url": "https://example.com",
+            "endpoint": "/items",
+            "auth_type": "none",
+        },
+        "secrets": {},
+        "destination": {"connector": "duckdb", "dataset_name": "raw"},
+        "write_disposition": "replace",
+    }
+    r = c.post("/api/pipelines", headers=_h(key), json=body)
+    assert r.status_code == 201, r.text
+    g = c.get("/api/pipelines/p_no_quality", headers=_h(key))
+    assert g.status_code == 200
+    quality = g.json()["config"]["quality"]
+    assert quality["row_count_min"] is None
+    assert quality["not_null_columns"] == []
+    assert quality["no_duplicates_key"] is None

@@ -583,14 +583,6 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
         dest.connection = None
 
     quality = body.quality
-    # Default: if no quality checks configured, enforce row_count_min=1
-    # so empty loads surface as quality failures rather than silent success.
-    if (
-        quality.row_count_min is None
-        and not quality.not_null_columns
-        and not quality.no_duplicates_key
-    ):
-        quality = quality.model_copy(update={"row_count_min": 1})
 
     try:
         config = PipelineConfig(
@@ -615,11 +607,12 @@ def create_pipeline(body: CreatePipelineBody) -> dict[str, str]:
             422,
             "kind=airflow ichki scheduler tomonidan boshqarilmaydi. manual / interval / daily_at ishlating.",
         )
-    if config.schedule.kind.value in ("interval", "daily_at"):
-        try:
-            reload_jobs()
-        except Exception:
-            log.exception("scheduler_reload_failed after create name=%s", config.name)
+    # Har doim reload: interval 1→60, interval→manual, daily_at o'zgarishi —
+    # eski job o'chirilishi shart. kind=manual bo'lsa ham skip qilinmasin.
+    try:
+        reload_jobs()
+    except Exception:
+        log.exception("scheduler_reload_failed after create name=%s", config.name)
     return {"status": "created", "name": config.name}
 
 
