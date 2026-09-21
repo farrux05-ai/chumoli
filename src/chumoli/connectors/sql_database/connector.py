@@ -230,7 +230,12 @@ def _build_sql_database_source(
 
     # Simple path: no cursor, no schema-qualify, no per-table write → sql_database
     if not has_cursor and not has_schema and not has_write:
-        return sql_database(credentials=credentials, table_names=table_names)
+        return sql_database(
+            credentials=credentials,
+            table_names=table_names,
+            backend="pyarrow",
+            chunk_size=50000,
+        )
 
     if has_cursor:
         from chumoli.core.sql_cursor_check import assert_cursor_columns_exist
@@ -250,6 +255,8 @@ def _build_sql_database_source(
             kwargs: dict[str, Any] = {
                 "credentials": credentials,
                 "table": table,
+                "backend": "pyarrow",
+                "chunk_size": 50000,
             }
             if schema:
                 kwargs["schema"] = schema

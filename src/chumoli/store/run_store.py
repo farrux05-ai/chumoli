@@ -49,6 +49,7 @@ _EXTRA_COLUMNS: list[tuple[str, str]] = [
     ("schema_changes_json", "TEXT NOT NULL DEFAULT '[]'"),
     ("cursor_last_value", "TEXT"),
     ("is_first_run", "INTEGER NOT NULL DEFAULT 1"),
+    ("peak_memory_mb", "REAL NOT NULL DEFAULT 0"),
 ]
 
 
@@ -119,6 +120,7 @@ class RunStore:
         schema_changes: list[str] | None = None,
         cursor_last_value: Any = None,
         is_first_run: bool = True,
+        peak_memory_mb: float = 0.0,
     ) -> int:
         started = (started_at or datetime.now(UTC)).isoformat()
         finished = (finished_at or datetime.now(UTC)).isoformat()
@@ -139,8 +141,8 @@ class RunStore:
                     started_at, finished_at, trigger,
                     duration_seconds, total_rows, rows_per_second,
                     new_rows, col_counts_json, schema_changes_json,
-                    cursor_last_value, is_first_run
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    cursor_last_value, is_first_run, peak_memory_mb
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     pipeline_name,
@@ -160,6 +162,7 @@ class RunStore:
                     json.dumps(schema_changes or []),
                     cursor_raw,
                     1 if is_first_run else 0,
+                    float(peak_memory_mb or 0),
                 ),
             )
             return int(cur.lastrowid)
@@ -253,4 +256,7 @@ class RunStore:
             "is_first_run": bool(r["is_first_run"])
             if "is_first_run" in keys and r["is_first_run"] is not None
             else True,
+            "peak_memory_mb": float(r["peak_memory_mb"] or 0)
+            if "peak_memory_mb" in keys
+            else 0.0,
         }
