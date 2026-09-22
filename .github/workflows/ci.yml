@@ -62,19 +62,21 @@ jobs:
         with:
           context: .
           push: false
+          load: true
           tags: chumoli:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Smoke — health endpoint
         run: |
+          docker images | head -20
           docker run -d --name chumoli-ci \
             -e CHUMOLI_HOME=/data \
             -e CHUMOLI_DATA=/data/chumoli-data \
             -e CHUMOLI_API_KEY=ci-test-key \
             -p 18000:8000 \
             chumoli:ci
-          for i in $(seq 1 30); do
+          for i in $(seq 1 40); do
             if curl -fsS http://127.0.0.1:18000/api/health; then
               echo "health ok"
               docker stop chumoli-ci
@@ -82,6 +84,7 @@ jobs:
             fi
             sleep 2
           done
+          echo "=== docker logs ==="
           docker logs chumoli-ci || true
           docker stop chumoli-ci || true
           exit 1
