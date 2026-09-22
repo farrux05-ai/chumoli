@@ -1,4 +1,4 @@
-"""Synthetic volume connector — no network."""
+"""Synthetic volume connector — pre-built Parquet + pyarrow batches."""
 
 from chumoli.connectors import register_builtin_connectors
 from chumoli.connectors.base import registry
@@ -17,7 +17,20 @@ def test_build_yields_requested_count() -> None:
         {"row_count": "1000", "batch_label": "t"},
         {},
     )
-    rows = list(src)
-    assert len(rows) == 1000
-    assert rows[0]["event_id"] == 0
-    assert rows[-1]["batch"] == "t"
+    total = 0
+    first_batch = None
+    for chunk in src:
+        if first_batch is None:
+            first_batch = chunk
+        if hasattr(chunk, "num_rows"):
+            total += int(chunk.num_rows)
+        elif isinstance(chunk, list):
+            total += len(chunk)
+        else:
+            total += 1
+    assert total == 1000
+    # Arrow batch path
+    if hasattr(first_batch, "column"):
+        names = first_batch.schema.names
+        assert "event_id" in names
+        assert "batch" in names

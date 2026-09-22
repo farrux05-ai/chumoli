@@ -1,17 +1,16 @@
 """
 chumoli.connectors.synthetic_volume
-====================================
+=====================================
 
-Local synthetic row generator — volume / throughput demos.
+Local volume / throughput demo.
 
-No network. Generates dict rows in-process for dlt to load into
-DuckDB/Postgres/etc. Purpose: show time-to-value (rows + seconds).
+Data is pre-built once as Parquet under examples/ (see demo_data.ensure_volume_parquet),
+then loaded with PyArrow batches — no row-by-row Python yield on the hot path.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import dlt
@@ -24,14 +23,13 @@ from chumoli.core.manifest import (
     SelectOption,
 )
 
-# Cap to protect accidental multi-million runs in shared demos.
 _MAX_ROWS = 2_000_000
 
 MANIFEST = ConnectorManifest(
     key="synthetic_volume",
     label="Volume demo (synthetic)",
     category=ConnectorCategory.UNIVERSAL,
-    description="Local generator — 10k…1M rows, no API. Shows dlt speed.",
+    description="Tayyor Parquet → DuckDB. Birinchi marta fayl yoziladi, keyin faqat o'qiladi.",
     dlt_source_factory="chumoli.connectors.synthetic_volume.connector.SyntheticVolumeConnector",
     fields=[
         FieldSpec(
@@ -47,7 +45,7 @@ MANIFEST = ConnectorManifest(
                 SelectOption(value="500000", label="500,000"),
                 SelectOption(value="1000000", label="1,000,000"),
             ],
-            help_text="Katta qiymat — birinchi run sekinroq bo'lishi mumkin",
+            help_text="Birinchi run faylni tayyorlaydi; keyingilari faqat Parquet o'qiydi",
         ),
         FieldSpec(
             key="batch_label",
@@ -62,27 +60,26 @@ MANIFEST = ConnectorManifest(
 
 
 @dlt.resource(name="events", write_disposition="replace", primary_key="event_id")
-def _events(row_count: int, batch_label: str) -> Iterator[dict[str, Any]]:
-    base = datetime.now(UTC)
-    for i in range(row_count):
-        yield {
-            "event_id": i,
-            "batch": batch_label,
-            "user_id": i % 10_000,
-            "amount": (i % 500) + 0.01,
-            "status": "ok" if i % 17 else "retry",
-            "ts": (base - timedelta(seconds=i % 86_400)).isoformat(),
-        }
+def _events_from_parquet(parquet_path: str) -> Iterator[Any]:
+    """Yield Arrow record batches from a pre-built Parquet file."""
+    import pyarrow.parquet as pq
+
+    pf = pq.ParquetFile(parquet_path)
+    for batch in pf.iter_batches(batch_size=50_000):
+        yield batch
 
 
 class SyntheticVolumeConnector:
-    """In-process volume generator — BaseUZConnector."""
+    """Load pre-built volume Parquet (BaseUZConnector-compatible)."""
 
     manifest = MANIFEST
 
     def build_dlt_source(self, params: dict[str, Any], secrets: dict[str, str]) -> Any:
-        del secrets  # no secrets
+        del secrets
         n = int(params.get("row_count") or 100_000)
         n = max(1, min(n, _MAX_ROWS))
         label = str(params.get("batch_label") or "demo")
-        return _events(row_count=n, batch_label=label)
+        from chumoli.core.demo_data import ensure_volume_parquet
+
+        path = ensure_volume_parquet(n, batch_label=label)
+        return _events_from_parquet(str(path))

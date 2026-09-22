@@ -739,8 +739,13 @@ def _record_and_demo_response(result: Any, duck_path: str, *, label: str) -> dic
 
 @app.post("/api/demo/volume", dependencies=[Depends(require_api_key)])
 def demo_volume(row_count: int = 100000) -> dict[str, Any]:
+    """Tayyor Parquet → DuckDB. Fayl birinchi marta yoziladi, keyin faqat o'qiladi."""
+    from chumoli.core.demo_data import ensure_volume_parquet
+
     register_builtin_connectors()
     row_count = max(1000, min(int(row_count), 1_000_000))
+    # Pre-build on disk so pipeline only loads (pyarrow batches)
+    ensure_volume_parquet(row_count, batch_label="wow")
     name = "demo_volume"
     manifest = registry.get_manifest("synthetic_volume")
     from chumoli.core.paths import examples_dir, ensure_runtime_dirs
@@ -757,12 +762,12 @@ def demo_volume(row_count: int = 100000) -> dict[str, Any]:
     )
     _store().save(config, {}, manifest)
     result = run_pipeline_by_name(name, store=_store())
-    return _record_and_demo_response(result, duck_path, label="Synthetic volume")
+    return _record_and_demo_response(result, duck_path, label="Volume Parquet → DuckDB")
 
 
 @app.post("/api/demo/sql", dependencies=[Depends(require_api_key)])
 def demo_sql() -> dict[str, Any]:
-    """Namuna SQLite (orders+customers) → local DuckDB. Birinchi yuklash ishqalansiz."""
+    """Tayyor SQLite (100k orders + 5k customers) → DuckDB, pyarrow backend."""
     from chumoli.core.demo_data import sample_sqlite_path, sample_sqlite_url
 
     register_builtin_connectors()
