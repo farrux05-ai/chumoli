@@ -336,8 +336,8 @@ def test_sql_inspect_endpoint(api, tmp_path) -> None:
     assert bad.status_code == 422
 
 
-def test_create_without_quality_does_not_inject_row_count_min(api) -> None:
-    """BUG 3: bo'sh quality sessiz row_count_min=1 qo'ymasligi kerak."""
+def test_create_without_quality_uses_safe_default(api) -> None:
+    """Yangi pipeline quality sozlamasiz yaratilsa, row_count_min=1 bo'lishi kerak."""
     c, key, _ = api
     body = {
         "name": "p_no_quality",
@@ -356,6 +356,6 @@ def test_create_without_quality_does_not_inject_row_count_min(api) -> None:
     g = c.get("/api/pipelines/p_no_quality", headers=_h(key))
     assert g.status_code == 200
     quality = g.json()["config"]["quality"]
-    assert quality["row_count_min"] is None
+    assert quality["row_count_min"] == 1  # safe default — bo'sh yuklama ushlaydi
     assert quality["not_null_columns"] == []
     assert quality["no_duplicates_key"] is None

@@ -123,6 +123,7 @@ def run_quality_checks(
     pipeline: dlt.Pipeline,
     quality: QualityConfig,
     tables_written: list[str],
+    write_disposition: str = "replace",
 ) -> QualityReport:
     """Runs whichever checks are configured (non-None/non-empty) against the destination.
 
@@ -173,6 +174,20 @@ def run_quality_checks(
 
     if quality.no_duplicates_key:
         for table in target_tables:
+            # append mode: each run re-inserts keys → aggregate looks duplicated
+            if (write_disposition or "").lower() == "append":
+                report.outcomes.append(
+                    CheckOutcome(
+                        check_name="no_duplicates",
+                        table_name=f"{table}.{quality.no_duplicates_key}",
+                        passed=True,
+                        detail=(
+                            f"{table}: append mode — takrorlanish tekshirilmadi "
+                            "(kutilgan holat)"
+                        ),
+                    )
+                )
+                continue
             report.outcomes.append(
                 _run_check_safely(
                     "no_duplicates",
@@ -225,14 +240,42 @@ def _quote(identifier: str, dest: str = "") -> str:
 
 
 def freshness_age_sql(table: str, timestamp_column: str, dest: str = "") -> str:
-    """Age of newest row in minutes. DuckDB/Postgres vs ClickHouse dialects."""
+    """Age of newest row in minutes.
+
+    Bigint (millisecond / second epoch) columns are supported — Payme
+    ``create_time`` and similar APIs store ms since epoch as INTEGER.
+    Heuristic: MAX > 1e12 → milliseconds; MAX > 1e9 → seconds; else TIMESTAMP.
+    """
     tbl = _quote(table, dest)
     col = _quote(timestamp_column, dest)
+
     if dest == "clickhouse":
-        return f"SELECT dateDiff('minute', max({col}), now()) FROM {tbl}"
-    return (
-        f"SELECT EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - MAX({col}))) / 60 FROM {tbl}"
-    )
+        return f"""
+            SELECT dateDiff('minute',
+                multiIf(
+                    max({col}) > 1000000000000,
+                    toDateTime(toInt64(max({col})) / 1000),
+                    max({col}) > 1000000000,
+                    toDateTime(toInt64(max({col}))),
+                    toDateTime(max({col}))
+                ),
+                now()
+            ) FROM {tbl}
+        """
+
+    # DuckDB / PostgreSQL
+    return f"""
+        SELECT EXTRACT(EPOCH FROM (
+            CURRENT_TIMESTAMP -
+            CASE
+                WHEN MAX({col}) > 1000000000000
+                    THEN to_timestamp(CAST(MAX({col}) AS DOUBLE) / 1000.0)
+                WHEN MAX({col}) > 1000000000
+                    THEN to_timestamp(CAST(MAX({col}) AS DOUBLE))
+                ELSE CAST(MAX({col}) AS TIMESTAMP)
+            END
+        )) / 60 FROM {tbl}
+    """
 
 
 def _check_row_count(

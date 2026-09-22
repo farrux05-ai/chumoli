@@ -57,14 +57,14 @@ def test_row_count_fails_when_below_minimum(loaded_pipeline) -> None:
 
 
 def test_not_null_passes_for_fully_populated_column(loaded_pipeline) -> None:
-    quality = QualityConfig(not_null_columns=["name"])
+    quality = QualityConfig(row_count_min=None, not_null_columns=["name"])
     report = run_quality_checks(loaded_pipeline, quality, tables_written=["people"])
 
     assert report.all_passed
 
 
 def test_not_null_fails_when_nulls_present(loaded_pipeline) -> None:
-    quality = QualityConfig(not_null_columns=["email"])
+    quality = QualityConfig(row_count_min=None, not_null_columns=["email"])
     report = run_quality_checks(loaded_pipeline, quality, tables_written=["people"])
 
     assert not report.all_passed
@@ -75,7 +75,7 @@ def test_no_duplicates_fails_when_key_repeats(loaded_pipeline) -> None:
     # "name" repeats (Aziz appears twice) — this is intentionally the
     # wrong key to pick for a real primary key, used here specifically
     # to exercise the duplicate-detection path.
-    quality = QualityConfig(no_duplicates_key="name")
+    quality = QualityConfig(row_count_min=None, no_duplicates_key="name")
     report = run_quality_checks(loaded_pipeline, quality, tables_written=["people"])
 
     assert not report.all_passed
@@ -83,7 +83,7 @@ def test_no_duplicates_fails_when_key_repeats(loaded_pipeline) -> None:
 
 
 def test_no_duplicates_passes_for_unique_key(loaded_pipeline) -> None:
-    quality = QualityConfig(no_duplicates_key="id")
+    quality = QualityConfig(row_count_min=None, no_duplicates_key="id")
     report = run_quality_checks(loaded_pipeline, quality, tables_written=["people"])
 
     assert report.all_passed
@@ -93,7 +93,7 @@ def test_freshness_fails_when_data_is_old(loaded_pipeline) -> None:
     # All rows are dated 2026-09-17 in the fixture; the SLA below is
     # deliberately tiny so "now" (whenever the test runs) is always
     # far outside it, without hardcoding a specific "current time".
-    quality = QualityConfig(freshness_max_minutes=1, freshness_column="updated_at")
+    quality = QualityConfig(row_count_min=None, freshness_max_minutes=1, freshness_column="updated_at")
     report = run_quality_checks(loaded_pipeline, quality, tables_written=["people"])
 
     assert not report.all_passed
@@ -102,7 +102,9 @@ def test_freshness_fails_when_data_is_old(loaded_pipeline) -> None:
 
 def test_freshness_skipped_without_a_configured_column(loaded_pipeline) -> None:
     """freshness_max_minutes alone (no freshness_column) should not attempt the check."""
-    quality = QualityConfig(freshness_max_minutes=1, freshness_column=None)
+    quality = QualityConfig(
+        row_count_min=None, freshness_max_minutes=1, freshness_column=None
+    )
     report = run_quality_checks(loaded_pipeline, quality, tables_written=["people"])
 
     assert report.outcomes == []
@@ -119,7 +121,8 @@ def test_multiple_checks_combine_in_one_report(loaded_pipeline) -> None:
 
 
 def test_no_checks_configured_returns_empty_report(loaded_pipeline) -> None:
-    quality = QualityConfig()
+    # Explicit None disables default row_count_min=1
+    quality = QualityConfig(row_count_min=None)
     report = run_quality_checks(loaded_pipeline, quality, tables_written=["people"])
 
     assert report.outcomes == []
@@ -133,3 +136,48 @@ def test_explicit_table_name_overrides_tables_written(loaded_pipeline) -> None:
 
     assert report.all_passed
     assert report.outcomes[0].table_name == "people"
+
+
+def test_no_duplicates_skipped_in_append_mode(loaded_pipeline) -> None:
+    """append + no_duplicates would always fail on re-runs — skip as expected."""
+    quality = QualityConfig(row_count_min=None, no_duplicates_key="name")
+    report = run_quality_checks(
+        loaded_pipeline,
+        quality,
+        tables_written=["people"],
+        write_disposition="append",
+    )
+    assert report.all_passed
+    assert report.outcomes[0].check_name == "no_duplicates"
+    assert "append mode" in report.outcomes[0].detail
+
+
+def test_freshness_bigint_milliseconds(tmp_path) -> None:
+    """Payme/Click style millisecond bigint columns must not silent-fail."""
+    import time
+
+    pipeline = dlt.pipeline(
+        pipeline_name="quality_ms_pipeline",
+        destination=dlt.destinations.duckdb(str(tmp_path / "ms.duckdb")),
+        dataset_name="raw",
+    )
+    now_ms = int(time.time() * 1000)
+
+    @dlt.resource(name="receipts", write_disposition="replace")
+    def receipts():
+        yield [
+            {"id": 1, "create_time": now_ms},
+            {"id": 2, "create_time": now_ms - 60_000},
+        ]
+
+    pipeline.run(receipts())
+    quality = QualityConfig(
+        row_count_min=None,
+        freshness_max_minutes=999999,
+        freshness_column="create_time",
+    )
+    report = run_quality_checks(pipeline, quality, tables_written=["receipts"])
+    assert report.all_passed, [o.detail for o in report.outcomes]
+    assert report.outcomes[0].check_name == "freshness"
+    assert "tekshirib bo'lmadi" not in report.outcomes[0].detail
+

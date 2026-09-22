@@ -79,7 +79,7 @@ class DestinationConfig(BaseModel):
 
 
 class QualityConfig(BaseModel):
-    row_count_min: int | None = None
+    row_count_min: int | None = 1
     not_null_columns: list[str] = Field(default_factory=list)
     no_duplicates_key: str | None = None
     freshness_max_minutes: int | None = None

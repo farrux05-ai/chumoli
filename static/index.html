@@ -421,9 +421,25 @@ function fmtRows(n){
 
 function lastRunBadge(lr){
   if(!lr) return '<span class="badge dim"><span class="dot"></span>Hech qachon</span>';
-  if(lr.success&&lr.quality_passed) return '<span class="badge ok"><span class="dot"></span>OK</span>';
-  if(lr.success) return '<span class="badge warn"><span class="dot"></span>Quality</span>';
-  return '<span class="badge err"><span class="dot"></span>Fail</span>';
+  if(!lr.success) return '<span class="badge err"><span class="dot"></span>Load xato</span>';
+  if(lr.quality_passed) return '<span class="badge ok"><span class="dot"></span>OK</span>';
+  const fails=(lr.quality_details||[]).filter(d=>d&&d.passed===false);
+  const title=esc(fails[0]?.detail||'Quality tekshiruvi otmadi');
+  return `<span class="badge warn" title="${title}"><span class="dot"></span>Quality ⚠ (${fails.length||'?'})</span>`;
+}
+
+function qualityFailDetails(r){
+  if(!Array.isArray(r.quality_details)) return '';
+  const fails=r.quality_details.filter(d=>d&&d.passed===false);
+  if(!fails.length) return '';
+  const lines=fails.slice(0,2).map(f=>{
+    const txt=String(f.detail||'');
+    return `<div style="font-size:11px;color:var(--amber);margin-top:2px">⚠ ${esc(txt.length>80?txt.slice(0,80)+'…':txt)}</div>`;
+  });
+  if(fails.length>2){
+    lines.push(`<div style="font-size:11px;color:var(--faint)">+${fails.length-2} ta boshqa xatolik</div>`);
+  }
+  return lines.join('');
 }
 
 function lastRunSummary(lr){
@@ -850,11 +866,7 @@ async function renderRuns(){
     <div class="table-wrap"><table>
       <thead><tr><th>Pipeline</th><th>Holat</th><th>Yangi/Jami</th><th>Tezlik</th><th>Davomiylik</th><th>Cursor</th></tr></thead>
       <tbody>${runs.map(r=>{
-        let qDetail='';
-        if(r.success&&r.quality_passed===false&&Array.isArray(r.quality_details)){
-          const f=r.quality_details.find(d=>d&&d.passed===false);
-          if(f?.detail){ const t=String(f.detail); qDetail=`<div style="font-size:11px;color:var(--amber);margin-top:3px">${esc(t.length>70?t.slice(0,70)+'…':t)}</div>`; }
-        }
+        const qDetail=(r.success&&r.quality_passed===false)?qualityFailDetails(r):'';
         const cursor=r.cursor_last_value!=null&&r.cursor_last_value!==''
           ? `cursor: ${esc(String(r.cursor_last_value).slice(0,20))}`
           : fmtRelative(r.finished_at);
@@ -1760,41 +1772,47 @@ function renderStepDestAndSave(body,foot){
       <div class="field-hint">Toshkent vaqti (Asia/Tashkent). Bir vaqtda ko'p pipeline bo'lsa navbat bilan ishlaydi.</div>
     </div>
 
-    <details style="margin-bottom:14px">
-      <summary style="cursor:pointer;font-size:12.5px;font-weight:600;color:var(--dim);padding:8px 0;user-select:none">Qo'shimcha: quality va bildirishnomalar</summary>
-      <div style="padding-top:12px">
-        <div class="field">
-          <label>Minimum qator (sifat tekshiruvi)</label>
-          <input id="f-q-min" type="number" min="0" placeholder="bo'sh = tekshiruv yo'q" value="${esc(dv('f-q-min',''))}"/>
-          <div class="field-hint">Bu filter emas — yuklashdan keyin "kamida N qator bormi?" tekshiradi. Vaqt filteri: manba qadamida cursor ustun + sana.</div>
-        </div>
-        <div class="field">
-          <label>Not null ustunlar</label>
-          <input id="f-q-nn" placeholder="col1, col2" value="${esc(dv('f-q-nn',''))}"/>
-        </div>
-        <div class="field">
-          <label>Takrorlash tekshiruvi (ustun)</label>
-          <input id="f-q-dup" placeholder="id" value="${esc(dv('f-q-dup',''))}"/>
-          <div class="field-hint" id="dup-hint" style="display:none;color:var(--amber)">
-            ⚠ Append mode bilan birga ishlatsangiz har run fail bo'ladi — replace yoki merge tanlang
-          </div>
-        </div>
-        <div class="field">
-          <label>Telegram chat ID</label>
-          <input id="f-tg-chat" placeholder="-100123…" value="${esc(dv('f-tg-chat',''))}"/>
-          ${!telegramCfg.configured?`<div class="field-hint" style="color:var(--amber)">⚠ Bot token hali sozlanmagan. <a href="#" id="goto-tg" style="color:var(--accent)">Sozlamalarga o'tish</a></div>`:''}
-        </div>
-        <div style="display:flex;gap:16px;align-items:center;margin-bottom:14px">
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--dim);cursor:pointer">
-            <input type="checkbox" id="f-n-fail" ${dv('f-n-fail',true)?'checked':''} style="accent-color:var(--accent)"/> Xatoda xabar
-          </label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--dim);cursor:pointer">
-            <input type="checkbox" id="f-n-ok" ${dv('f-n-ok',false)?'checked':''} style="accent-color:var(--accent)"/> Muvaffaqiyatda xabar
-          </label>
-        </div>
-        <input type="hidden" id="f-q-table" value="${esc(dv('f-q-table',''))}"/>
+    <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
+      <div class="section-title">Sifat tekshiruvi</div>
+      <div class="field-hint" style="margin-bottom:12px">
+        Pipeline har run'dan keyin quyidagilarni tekshiradi
       </div>
-    </details>`;
+      <div class="field">
+        <label>Minimum qator soni</label>
+        <input id="f-q-min" type="number" min="0"
+               placeholder="1 (default — bo'sh yuklama ushlaydi)"
+               value="${esc(dv('f-q-min','1'))}"/>
+        <div class="field-hint">
+          Agar bu sondan kam qator kelsa — xato sifatida belgilanadi.
+          Payme/Click uchun kamida 1 qo'ying.
+        </div>
+      </div>
+      <div class="field">
+        <label>Not null ustunlar</label>
+        <input id="f-q-nn" placeholder="col1, col2" value="${esc(dv('f-q-nn',''))}"/>
+      </div>
+      <div class="field">
+        <label>Takrorlash tekshiruvi (ustun)</label>
+        <input id="f-q-dup" placeholder="id" value="${esc(dv('f-q-dup',''))}"/>
+        <div class="field-hint" id="dup-hint" style="display:none;color:var(--amber)">
+          ⚠ Append mode bilan birga ishlatsangiz har run fail bo'ladi — replace yoki merge tanlang
+        </div>
+      </div>
+      <div class="field">
+        <label>Telegram chat ID</label>
+        <input id="f-tg-chat" placeholder="-100123…" value="${esc(dv('f-tg-chat',''))}"/>
+        ${!telegramCfg.configured?`<div class="field-hint" style="color:var(--amber)">⚠ Bot token hali sozlanmagan. <a href="#" id="goto-tg" style="color:var(--accent)">Sozlamalarga o'tish</a></div>`:''}
+      </div>
+      <div style="display:flex;gap:16px;align-items:center;margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--dim);cursor:pointer">
+          <input type="checkbox" id="f-n-fail" ${dv('f-n-fail',true)?'checked':''} style="accent-color:var(--accent)"/> Xatoda xabar
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--dim);cursor:pointer">
+          <input type="checkbox" id="f-n-ok" ${dv('f-n-ok',false)?'checked':''} style="accent-color:var(--accent)"/> Muvaffaqiyatda xabar
+        </label>
+      </div>
+      <input type="hidden" id="f-q-table" value="${esc(dv('f-q-table',''))}"/>
+    </div>`;
 
   foot.innerHTML=`<button class="btn btn-ghost" id="back4">← Orqaga</button><button class="btn btn-primary" id="save2">${editingName?'Yangilash':'Saqlash'}</button>`;
   document.getElementById('back4').onclick=()=>{ step=3; renderDrawer(); };

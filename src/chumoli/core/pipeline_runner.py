@@ -423,7 +423,10 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
             quality_report = QualityReport()
         else:
             quality_report = run_quality_checks(
-                pipeline, stored.config.quality, tables_written=list(row_counts.keys())
+                pipeline,
+                stored.config.quality,
+                tables_written=list(row_counts.keys()),
+                write_disposition=stored.config.write_disposition.value,
             )
         log.info(
             "step_quality_done",

@@ -103,8 +103,13 @@ def format_run_message(
     if quality_details:
         fails = [d for d in quality_details if not d.get("passed", True)]
         if fails:
-            detail = fails[0].get("detail") or fails[0].get("check") or "fail"
-            lines.append(f"<b>Quality:</b> {_esc(str(detail)[:200])}")
+            lines.append("")
+            lines.append("<b>Quality xatolari:</b>")
+            for f in fails[:3]:
+                detail = f.get("detail") or f.get("check") or "fail"
+                lines.append(f"  · {_esc(str(detail)[:150])}")
+            if len(fails) > 3:
+                lines.append(f"  · … va yana {len(fails) - 3} ta")
 
     return "\n".join(lines)
 
