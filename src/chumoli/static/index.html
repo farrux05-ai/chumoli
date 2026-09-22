@@ -1727,6 +1727,13 @@ function renderStepDestAndSave(body,foot){
         <input id="f-dest-conn" type="password" placeholder="" value="" autocomplete="off"/>
         <div class="field-hint" id="dest-conn-help"></div>
       </div>
+      <div class="field" id="dest-fs-info" style="display:none">
+        <div style="padding:12px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2,#1a1a1a)">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">📂 Standart papka</div>
+          <div class="mono" style="font-size:12px;word-break:break-all;margin-bottom:6px">~/chumoli-data/exports/&lt;pipeline&gt;/</div>
+          <div class="field-hint" style="margin:0">Path kiritish shart emas — Run dan keyin fayllar shu yerga yoziladi. Preview da ochasiz.</div>
+        </div>
+      </div>
       <div class="field">
         <label>Dataset nomi</label>
         <input id="f-dataset" value="${esc(dv('f-dataset','raw'))}"/>
@@ -1890,20 +1897,26 @@ function renderStepDestAndSave(body,foot){
     // Drop shared fallback so old PG string cannot leak into ClickHouse/others
     delete draft['f-dest-conn'];
     if(fmtWrap) fmtWrap.style.display=isFs?'block':'none';
-    // Filesystem: always show optional path (even if needs_connection=false)
-    if(d?.needs_connection || isFs){
+    const fsInfo=document.getElementById('dest-fs-info');
+    // Local filesystem: no path friction — empty → default exports/
+    if(key==='filesystem'){
+      wrap.style.display='none';
+      if(fsInfo) fsInfo.style.display='block';
+      if(connEl){ connEl.value=''; draft._destConnByKey[key]=''; }
+    }else if(d?.needs_connection || key==='s3'){
+      if(fsInfo) fsInfo.style.display='none';
       wrap.style.display='block';
       document.getElementById('dest-conn-label').textContent=d?.connection_label||'Connection';
       if(connEl){
         connEl.placeholder=d?.connection_placeholder||'';
-        connEl.type=isFs?'text':'password';
-        // Only this destination's own cached value (empty if never set)
+        connEl.type=key==='s3'?'text':'password';
         const cached=draft._destConnByKey[key];
         connEl.value=(cached!==undefined && cached!==null)?cached:'';
         draft._destConnByKey[key]=connEl.value;
       }
       document.getElementById('dest-conn-help').textContent=d?.connection_help||'';
     }else{
+      if(fsInfo) fsInfo.style.display='none';
       wrap.style.display='none';
       if(connEl) connEl.value='';
     }
@@ -2095,10 +2108,13 @@ async function savePipeline(){
     dest={connector:destKey,dataset_name:(document.getElementById('f-dataset')||{}).value||'raw'};
     // Only connection for the selected dest key (never another destination's URL)
     let connVal='';
-    if(destConnEl && (destConnEl.offsetParent!==null || destKey==='filesystem' || destKey==='s3')){
+    // Local filesystem: never send path — backend default exports/
+    if(destKey==='filesystem'){
+      connVal='';
+    }else if(destConnEl && (destConnEl.offsetParent!==null || destKey==='s3')){
       connVal=(destConnEl.value||'').trim();
     }
-    if(!connVal && draft._destConnByKey && Object.prototype.hasOwnProperty.call(draft._destConnByKey, destKey)){
+    if(destKey!=='filesystem' && !connVal && draft._destConnByKey && Object.prototype.hasOwnProperty.call(draft._destConnByKey, destKey)){
       connVal=String(draft._destConnByKey[destKey]||'').trim();
     }
     if(connVal) dest.connection=connVal;
