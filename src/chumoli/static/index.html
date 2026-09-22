@@ -1724,15 +1724,11 @@ function renderStepDestAndSave(body,foot){
       </div>
       <div class="field" id="dest-conn-wrap" style="display:none">
         <label id="dest-conn-label">Connection</label>
-        <input id="f-dest-conn" type="password" placeholder="" value="" autocomplete="off"/>
-        <div class="field-hint" id="dest-conn-help"></div>
-      </div>
-      <div class="field" id="dest-fs-info" style="display:none">
-        <div style="padding:12px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2,#1a1a1a)">
-          <div style="font-size:13px;font-weight:600;margin-bottom:4px">📂 Standart papka</div>
-          <div class="mono" style="font-size:12px;word-break:break-all;margin-bottom:6px">~/chumoli-data/exports/&lt;pipeline&gt;/</div>
-          <div class="field-hint" style="margin:0">Path kiritish shart emas — Run dan keyin fayllar shu yerga yoziladi. Preview da ochasiz.</div>
+        <div id="dest-conn-row" style="display:flex;gap:8px;align-items:stretch">
+          <input id="f-dest-conn" type="password" placeholder="" value="" autocomplete="off" style="flex:1;min-width:0"/>
+          <button type="button" class="btn btn-ghost" id="btn-pick-folder" style="display:none;white-space:nowrap;flex-shrink:0">📂 Tanlash</button>
         </div>
+        <div class="field-hint" id="dest-conn-help"></div>
       </div>
       <div class="field">
         <label>Dataset nomi</label>
@@ -1897,28 +1893,24 @@ function renderStepDestAndSave(body,foot){
     // Drop shared fallback so old PG string cannot leak into ClickHouse/others
     delete draft['f-dest-conn'];
     if(fmtWrap) fmtWrap.style.display=isFs?'block':'none';
-    const fsInfo=document.getElementById('dest-fs-info');
-    // Local filesystem: no path friction — empty → default exports/
-    if(key==='filesystem'){
-      wrap.style.display='none';
-      if(fsInfo) fsInfo.style.display='block';
-      if(connEl){ connEl.value=''; draft._destConnByKey[key]=''; }
-    }else if(d?.needs_connection || key==='s3'){
-      if(fsInfo) fsInfo.style.display='none';
+    const pickBtn=document.getElementById('btn-pick-folder');
+    if(d?.needs_connection || key==='filesystem' || key==='s3'){
       wrap.style.display='block';
       document.getElementById('dest-conn-label').textContent=d?.connection_label||'Connection';
       if(connEl){
         connEl.placeholder=d?.connection_placeholder||'';
-        connEl.type=key==='s3'?'text':'password';
+        // text for path/URL, password for DB secrets
+        connEl.type=(key==='filesystem'||key==='s3')?'text':'password';
         const cached=draft._destConnByKey[key];
         connEl.value=(cached!==undefined && cached!==null)?cached:'';
         draft._destConnByKey[key]=connEl.value;
       }
       document.getElementById('dest-conn-help').textContent=d?.connection_help||'';
+      if(pickBtn) pickBtn.style.display=key==='filesystem'?'inline-flex':'none';
     }else{
-      if(fsInfo) fsInfo.style.display='none';
       wrap.style.display='none';
       if(connEl) connEl.value='';
+      if(pickBtn) pickBtn.style.display='none';
     }
   };
   const syncDestMode=()=>{
@@ -1930,13 +1922,33 @@ function renderStepDestAndSave(body,foot){
   };
   if(destSel){
     destSel.onchange=()=>{ syncDest(); };
-    // Keep cache in sync while typing
     const connEl=document.getElementById('f-dest-conn');
     if(connEl){
       connEl.addEventListener('input',()=>{
         const k=destSel.value||'duckdb';
         draft._destConnByKey[k]=connEl.value||'';
       });
+    }
+    const pickBtn=document.getElementById('btn-pick-folder');
+    if(pickBtn){
+      pickBtn.onclick=async()=>{
+        pickBtn.disabled=true;
+        const prev=pickBtn.textContent;
+        pickBtn.textContent='…';
+        try{
+          const res=await api('/api/ui/pick-folder',{method:'POST',body:'{}'});
+          if(res.cancelled){ toast('Bekor qilindi','ok'); return; }
+          if(res.path){
+            const el=document.getElementById('f-dest-conn');
+            if(el){
+              el.value=res.path;
+              draft._destConnByKey['filesystem']=res.path;
+            }
+            toast('Papka tanlandi','ok');
+          }
+        }catch(e){ toast(e.message||String(e),'err'); }
+        finally{ pickBtn.disabled=false; pickBtn.textContent=prev; }
+      };
     }
     syncDest();
   }
@@ -2108,15 +2120,13 @@ async function savePipeline(){
     dest={connector:destKey,dataset_name:(document.getElementById('f-dataset')||{}).value||'raw'};
     // Only connection for the selected dest key (never another destination's URL)
     let connVal='';
-    // Local filesystem: never send path — backend default exports/
-    if(destKey==='filesystem'){
-      connVal='';
-    }else if(destConnEl && (destConnEl.offsetParent!==null || destKey==='s3')){
+    if(destConnEl && (destConnEl.offsetParent!==null || destKey==='filesystem' || destKey==='s3')){
       connVal=(destConnEl.value||'').trim();
     }
-    if(destKey!=='filesystem' && !connVal && draft._destConnByKey && Object.prototype.hasOwnProperty.call(draft._destConnByKey, destKey)){
+    if(!connVal && draft._destConnByKey && Object.prototype.hasOwnProperty.call(draft._destConnByKey, destKey)){
       connVal=String(draft._destConnByKey[destKey]||'').trim();
     }
+    // Empty filesystem path → backend default ~/chumoli-data/exports/<pipeline>/
     if(connVal) dest.connection=connVal;
     if(destKey==='filesystem'||destKey==='s3'){
       const ff=(document.getElementById('f-file-format')||{}).value||'csv';

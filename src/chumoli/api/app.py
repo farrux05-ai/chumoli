@@ -423,6 +423,30 @@ def list_destinations() -> list[dict[str, Any]]:
     return all_destinations()
 
 
+@app.post("/api/ui/pick-folder", dependencies=[Depends(require_api_key)])
+def pick_export_folder() -> dict[str, Any]:
+    """Native OS folder dialog (same machine as the API). Returns absolute path."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from chumoli.core.folder_picker import pick_folder
+
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            path = pool.submit(pick_folder, "Chumoli — eksport papkasini tanlang").result(
+                timeout=320
+            )
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Papka tanlash xatosi: {e}",
+        ) from e
+    if not path:
+        return {"path": None, "cancelled": True}
+    return {"path": path, "cancelled": False}
+
+
 class SavedDestinationBody(BaseModel):
     label: str
     connector: str

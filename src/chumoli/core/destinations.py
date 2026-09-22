@@ -103,10 +103,10 @@ DESTINATION_CATALOG: list[DestinationSpec] = [
     DestinationSpec(
         key="filesystem",
         label="Lokal fayl (CSV / Parquet)",
-        description="Path kiritish shart emas — ~/chumoli-data/exports/<pipeline>/ ga yoziladi.",
+        description="Lokal papka — «Tanlash» bilan ochiladi yoki bo'sh = standart exports.",
         needs_connection=False,
-        connection_placeholder="",
-        connection_help="Avtomatik ~/chumoli-data/exports/<pipeline>/. S3 uchun alohida destination.",
+        connection_placeholder="Bo'sh = ~/chumoli-data/exports/<pipeline>/",
+        connection_help="«Tanlash» tugmasi kompyuterdan papka ochadi. Bo'sh qoldirsangiz standart papka ishlatiladi.",
         connection_label="Lokal papka",
     ),
     DestinationSpec(
