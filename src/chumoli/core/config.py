@@ -57,7 +57,7 @@ class ScheduleConfig(BaseModel):
 
 
 class DestinationConfig(BaseModel):
-    connector: str = Field(..., description="duckdb|postgresql|clickhouse|filesystem")
+    connector: str = Field(..., description="duckdb|postgresql|clickhouse|filesystem|s3")
     connection: str | None = Field(default=None)
     dataset_name: str = Field(default="raw")
     # filesystem only: csv (Excel-friendly default) | parquet | jsonl

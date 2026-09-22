@@ -21,7 +21,7 @@ L1  dlt (Apache 2.0, unmodified)
 
 | Layer | Package / path | Knows about dlt? |
 |-------|----------------|------------------|
-| L4 | `static/index.html`, `api/app.py` | No (calls our API only) |
+| L4 | `src/chumoli/static/index.html`, `api/app.py` | No (calls our API only) |
 | L3 | `connectors/*` | Yes — only inside `build_dlt_source` |
 | L2 | `core/`, `store/`, `security/` | Only `pipeline_runner` + `scheduler` |
 | L1 | external `dlt` package | — |
@@ -53,7 +53,7 @@ UI/API
 | `ConnectorManifest` | `core/manifest.py` | Form schema + secret keys |
 | `BaseUZConnector` | `connectors/base.py` | Protocol: `manifest` + `build_dlt_source` |
 | `PipelineConfig` | `core/config.py` | Runnable config (no secrets in source_params) |
-| `DestinationConfig` | `core/config.py` + `core/destinations.py` | duckdb / postgresql / filesystem / clickhouse |
+| `DestinationConfig` | `core/config.py` + `core/destinations.py` | duckdb / postgresql / filesystem / s3 / clickhouse |
 | `ControlStore` | `store/control_store.py` | SQLite configs + Fernet secrets |
 | `RunStore` | `store/run_store.py` | Run history (no secrets) |
 
@@ -64,16 +64,26 @@ UI/API
 - `params` and `secrets` stay **separate** inside `build_dlt_source`.
 - Never log secret values.
 
+## Runtime paths
+
+| Path | Role |
+|------|------|
+| `$CHUMOLI_HOME` (default `~/.chumoli`) | Control DB, keys, dlt `pipelines/` state (hidden) |
+| `$CHUMOLI_DATA` (default `~/chumoli-data`) | DuckDB files, local CSV/Parquet exports |
+| `~/chumoli-data/exports/<pipeline>/` | Default local filesystem destination |
+
 ## Destinations (MVP set)
 
-| key | needs connection |
-|-----|------------------|
-| duckdb | optional path |
-| postgresql | yes |
-| filesystem | yes |
-| clickhouse | yes |
+| Catalog key | dlt backend | Connection |
+|-------------|-------------|------------|
+| `duckdb` | duckdb | optional path → `~/chumoli-data/<pipeline>.duckdb` |
+| `postgresql` | postgres | required SQLAlchemy URL |
+| `filesystem` | filesystem | optional local path → `~/chumoli-data/exports/<pipeline>/` |
+| `s3` | filesystem | required `s3://` / `gs://` / `az://` … |
+| `clickhouse` | clickhouse | required URL (`dlt[clickhouse]` extra) |
 
-`DestinationConfig.connector` equals dlt destination name.
+- `filesystem` and `s3` are **separate** UI entries; both use `dlt.destinations.filesystem`.
+- Local data files are user-visible; dlt `_dlt*` metadata under the dataset is filtered in UI preview.
 
 ## Scheduler
 
@@ -92,7 +102,7 @@ UI/API
 | Run history | `store/run_store.py` |
 | Schedule | `core/scheduler.py` |
 | HTTP route | `api/app.py` |
-| UI | `static/index.html` |
+| UI | `src/chumoli/static/index.html` |
 
 ## Skills
 

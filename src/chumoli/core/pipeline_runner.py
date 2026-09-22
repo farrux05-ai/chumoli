@@ -63,8 +63,10 @@ class RunResult:
 
 # UI/catalog keys → dlt.destinations attribute names (when they differ).
 # Catalog keeps user-facing names (postgresql); dlt module uses postgres.
+# s3 → filesystem (same dlt destination, different UI / validation).
 _DLT_DEST_ALIASES: dict[str, str] = {
     "postgresql": "postgres",
+    "s3": "filesystem",
 }
 
 # Rough scheme hints so a Postgres URL is never passed to ClickHouse (and vice versa).
@@ -96,6 +98,7 @@ def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
         pipelines_dir,
         resolve_duckdb_path,
         resolve_filesystem_url,
+        resolve_s3_url,
     )
 
     ensure_runtime_dirs()
@@ -108,9 +111,19 @@ def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
         connection = resolve_duckdb_path(connection or "", config.name)
 
     if dest_key == "filesystem":
-        # bucket_url: local folder or s3://… (not credentials=)
-        bucket_url = resolve_filesystem_url(connection, config.name)
-        destination: Any = dlt.destinations.filesystem(bucket_url=bucket_url)
+        # Local only — data under ~/chumoli-data/exports/; dlt state stays in pipelines_dir
+        bucket_url = resolve_filesystem_url(connection, config.name, allow_remote=False)
+        # Clean layout: one folder per table; _dlt_* metadata still written by dlt under dataset
+        destination: Any = dlt.destinations.filesystem(
+            bucket_url=bucket_url,
+            layout="{table_name}/{load_id}.{file_id}.{ext}",
+        )
+    elif dest_key == "s3":
+        bucket_url = resolve_s3_url(connection)
+        destination = dlt.destinations.filesystem(
+            bucket_url=bucket_url,
+            layout="{table_name}/{load_id}.{file_id}.{ext}",
+        )
     elif connection:
         _warn_connection_scheme(dest_key, connection)
         try:
@@ -144,6 +157,21 @@ def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
         dataset_name=config.destination.dataset_name,
         pipelines_dir=str(pdir),
     )
+
+
+def resolve_export_path(config: PipelineConfig) -> str | None:
+    """Absolute local export folder for filesystem destination; None for remote/other."""
+    from chumoli.core.paths import is_remote_url, resolve_filesystem_url
+
+    if config.destination.connector != "filesystem":
+        return None
+    conn = config.destination.connection or ""
+    if is_remote_url(conn):
+        return None
+    try:
+        return resolve_filesystem_url(conn, config.name, allow_remote=False)
+    except Exception:
+        return None
 
 
 def get_running_pipelines() -> dict[str, dict[str, Any]]:
@@ -354,9 +382,9 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
         "write_disposition": stored.config.write_disposition.value,
         "primary_key": stored.config.primary_key or None,
     }
-    # Filesystem: explicit loader format (csv default for local-friendly exports)
+    # Filesystem / S3: explicit loader format (csv default for local-friendly exports)
     dest = stored.config.destination
-    if dest.connector == "filesystem":
+    if dest.connector in ("filesystem", "s3"):
         import os
 
         fmt = dest.file_format or "csv"
@@ -418,8 +446,8 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
     if load_succeeded:
         log.info("step_quality_start", tables=list(row_counts.keys()))
         _set_run_step(name, "quality")
-        # Filesystem (CSV/Parquet files) — SQL quality checks don't apply reliably
-        if dest.connector == "filesystem":
+        # Filesystem / S3 (CSV/Parquet files) — SQL quality checks don't apply reliably
+        if dest.connector in ("filesystem", "s3"):
             quality_report = QualityReport()
         else:
             quality_report = run_quality_checks(
@@ -687,10 +715,79 @@ def _preview_fqn(dest_key: str, dataset: str, table_name: str) -> str:
     return f'"{ds}"."{tbl}"'
 
 
+def _list_export_files(export_root: str, dataset: str) -> list[dict[str, Any]]:
+    """List user data files under export path, skipping _dlt* metadata folders."""
+    from pathlib import Path
+
+    root = Path(export_root)
+    # dlt writes under <bucket>/<dataset_name>/…
+    candidates = [root / dataset, root]
+    files: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for base in candidates:
+        if not base.is_dir():
+            continue
+        for p in sorted(base.rglob("*")):
+            if not p.is_file():
+                continue
+            # Skip dlt internal metadata tables/folders
+            parts = {x.lower() for x in p.parts}
+            if any(part.startswith("_dlt") for part in parts):
+                continue
+            if p.name.startswith(".") or p.name == "init":
+                continue
+            key = str(p.resolve())
+            if key in seen:
+                continue
+            seen.add(key)
+            try:
+                rel = str(p.relative_to(root))
+            except ValueError:
+                rel = p.name
+            files.append(
+                {
+                    "path": key,
+                    "relative": rel,
+                    "name": p.name,
+                    "size": p.stat().st_size,
+                    "suffix": p.suffix.lower(),
+                }
+            )
+    return files
+
+
+def _sample_csv_file(path: str, limit: int) -> dict[str, Any]:
+    """Read header + first N data rows from a local CSV (no full load)."""
+    import csv
+
+    columns: list[str] = []
+    rows: list[list[Any]] = []
+    try:
+        with open(path, newline="", encoding="utf-8", errors="replace") as f:
+            reader = csv.reader(f)
+            header = next(reader, None)
+            if header is None:
+                return {"columns": [], "rows": []}
+            columns = [str(c) for c in header]
+            for i, row in enumerate(reader):
+                if i >= limit:
+                    break
+                # pad / trim to header length
+                cells = list(row) + [""] * max(0, len(columns) - len(row))
+                rows.append(cells[: len(columns)])
+    except Exception as e:
+        return {"columns": [], "rows": [], "error": str(e)}
+    return {"columns": columns, "rows": rows}
+
+
 def get_preview_rows(
     name: str, store: ControlStore | None = None, limit: int = 10
 ) -> dict[str, Any]:
-    """First N rows per loaded table (UI preview). Max 3 tables."""
+    """First N rows per loaded table (UI preview). Max 3 tables.
+
+    For local filesystem: returns export_path + file list + CSV samples
+    (no SQL). For S3: returns path hint only (no local files).
+    """
     # DuckDB (and many warehouses) reject concurrent writers — never open
     # a second connection while this pipeline is still loading.
     running = get_running_pipelines()
@@ -701,15 +798,57 @@ def get_preview_rows(
             "error": f"Pipeline hozir ishlayapti ({step}). Tugaguncha kuting.",
         }
     _, stored = _load_stored(name, store)
-    if stored.config.destination.connector == "filesystem":
-        return {
-            "tables": {},
-            "error": "Fayl (CSV/Parquet) destination uchun SQL preview yo'q — fayllarni papkadan oching.",
-        }
-    pipeline = build_dlt_pipeline(stored.config)
+    dest_key = stored.config.destination.connector
     limit = max(1, min(int(limit), 100))
     dataset = stored.config.destination.dataset_name or "raw"
-    dest_key = stored.config.destination.connector
+
+    if dest_key == "s3":
+        conn = (stored.config.destination.connection or "").strip()
+        return {
+            "tables": {},
+            "export_path": conn or None,
+            "files": [],
+            "kind": "s3",
+            "error": (
+                "S3 destination — fayllar bulutda. "
+                "Bucket URL: " + (conn or "(bo'sh)")
+            ),
+        }
+
+    if dest_key == "filesystem":
+        export_path = resolve_export_path(stored.config)
+        if not export_path:
+            return {
+                "tables": {},
+                "error": "Lokal export yo'li topilmadi.",
+            }
+        files = _list_export_files(export_path, dataset)
+        tables: dict[str, Any] = {}
+        # Sample up to 3 CSV files for inline preview
+        csv_files = [f for f in files if f.get("suffix") == ".csv"][:3]
+        for fmeta in csv_files:
+            sample = _sample_csv_file(fmeta["path"], limit)
+            # table key = parent folder (table_name) or file stem
+            from pathlib import Path as _P
+
+            parent = _P(fmeta["relative"]).parts[0] if fmeta.get("relative") else fmeta["name"]
+            key = parent if parent and not parent.endswith(".csv") else fmeta["name"]
+            if key in tables:
+                key = fmeta["relative"] or fmeta["name"]
+            tables[key] = {
+                **sample,
+                "file": fmeta["relative"] or fmeta["name"],
+            }
+        return {
+            "tables": tables,
+            "files": files,
+            "export_path": export_path,
+            "kind": "filesystem",
+            "col_counts": {k: len(v.get("columns") or []) for k, v in tables.items()},
+            "error": None if (files or tables) else "Hali hech qanday fayl yozilmagan — avval Run qiling.",
+        }
+
+    pipeline = build_dlt_pipeline(stored.config)
 
     try:
         col_counts = _user_col_counts(pipeline)

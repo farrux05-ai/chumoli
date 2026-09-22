@@ -67,7 +67,7 @@ def get_row_counts(
     if from_trace:
         return from_trace
 
-    if dest_key == "filesystem":
+    if dest_key in ("filesystem", "s3"):
         return row_counts_from_load_packages(load_info)
 
     user_tables = [

@@ -10,7 +10,7 @@ Soliq, MyGov, and whatever comes after) are added one by one.
 
 **Adding a connector touches exactly two new files and one existing
 file by exactly two lines.** Nothing else. See
-[`connector-skill.md`](connector-skill.md) for the literal steps.
+[`../skills/write-connector.md`](../skills/write-connector.md) for the literal steps.
 
 ```
 connectors/<name>/manifest.py     # NEW — field list, labels, category

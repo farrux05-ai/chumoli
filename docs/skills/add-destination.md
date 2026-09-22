@@ -28,3 +28,8 @@ Only add if UZ market needs it.
 ## 4. API/UI auto from catalog — no hardcoded select list.
 
 ## 5. Test catalog key + no plaintext password in config_json.
+
+## Notes (filesystem vs s3)
+
+- Catalog key `filesystem` = local paths only → `~/chumoli-data/exports/`.
+- Catalog key `s3` = remote schemes; both map to `dlt.destinations.filesystem` via `_DLT_DEST_ALIASES`.

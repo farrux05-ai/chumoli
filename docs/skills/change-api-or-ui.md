@@ -5,9 +5,10 @@
 - HTTP ↔ registry, ControlStore, RunStore, run_pipeline_by_name, scheduler
 - No extract/load business logic; no returning secrets
 
-## UI (`static/index.html`)
+## UI (`src/chumoli/static/index.html`)
 
 - Data only via `/api/*`
 - Forms from manifest.fields
 - Uzbek apostrophes break JS single quotes — use double quotes
 - Optional CONNECTOR_ORDER for sort only
+- Canonical path is package-local static (not a repo-root `static/` copy)

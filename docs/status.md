@@ -1,22 +1,26 @@
-# Status — V1 release fixes
+# Status
 
-**Verified:** 2026-09-20
+**Verified:** 2026-09-22
 
-## Tests
-- Run: `PYTHONPATH=src python -m pytest tests/ -q`
-- Prior: 139 passed on clean install
+## Latest (filesystem / S3)
 
-## Latest fix (dest connection isolation)
-- **UI:** Destination connection is cached **per destination key** only (`_destConnByKey`). Shared `f-dest-conn` fallback removed so a PostgreSQL URL cannot leak into ClickHouse / filesystem / others.
-- **UI:** `closeDrawer` clears `draft` and inspect state (no stale strings after close).
-- **UI:** Dest conn input starts empty; unavailable destinations (e.g. ClickHouse without `dlt[clickhouse]`) shown disabled.
-- **API:** Reject create when destination extra is not installed (clear 422 in Uzbek).
-- **Runner:** Scheme mismatch guard (postgres:// under clickhouse dest → clear error); clearer `pip install "dlt[…]"` message.
+- Catalog: **`filesystem`** (local only) vs **`s3`** (object storage) — both use `dlt.destinations.filesystem`.
+- Local exports: **`~/chumoli-data/exports/<pipeline>/`** (user-visible). dlt state remains under **`~/.chumoli/pipelines/`**.
+- Preview for local filesystem: `export_path`, file list (skips `_dlt*`), CSV sample + copy/open in UI.
+- Removed duplicate repo-root `static/`; canonical UI is `src/chumoli/static/index.html`.
+- Docs aligned: dashboard is static HTML (not marimo / not dltHub).
 
-## V1 P0 (prior)
-- Notify, CORS, Recovery UI, async job cleanup
+## Prior (dest connection isolation)
+- **UI:** Destination connection cached **per destination key** (`_destConnByKey`).
+- **API:** Reject create when destination extra is not installed.
+- **Runner:** Scheme mismatch guard between destination types.
 
 ## Prior (still valid)
 - Async run: `POST /api/pipelines/{name}/run/async` + `GET /api/runs/jobs/{id}`
-- API key: `keys_match` / constant-time
-- Telegram token encrypted via `set_secret_setting`
+- API key constant-time compare
+- Telegram token via encrypted settings
+
+## Tests
+```bash
+PYTHONPATH=src python -m pytest tests/ -q
+```

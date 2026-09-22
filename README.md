@@ -6,51 +6,37 @@
 
 <p align="center">
   <strong>O‘zbekiston ma’lumot manbalari uchun engil EL vosita</strong><br/>
-  <a href="https://dlthub.com">dlt</a> ustida · Apache 2.0
+  <a href="https://dlthub.com/docs">dlt</a> (Apache 2.0) ustida · UI + CLI
 </p>
 
 <p align="center">
-  <a href="#tez-boshlash">Tez boshlash</a> ·
-  <a href="#dashboard">Dashboard</a> ·
-  <a href="#cli">CLI</a> ·
-  <a href="#ulagichlar">Ulagichlar</a> ·
-  <a href="#sozlamalar">Sozlamalar</a>
+  <a href="https://github.com/farrux05-ai/chumoli/actions/workflows/ci.yml"><img src="https://github.com/farrux05-ai/chumoli/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
+  <img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python" />
 </p>
 
 ---
 
-SQL, REST, Click, Payme, Uzum va boshqa manbalardan ma’lumotni olib **DuckDB / PostgreSQL** ga yuklang. Brauzerda boshqaring yoki terminaldan ishga tushiring.
-
----
+SQL, REST, Click, Payme, Uzum va boshqa manbalardan ma’lumotni olib **DuckDB**, **PostgreSQL**, **lokal fayl** yoki **S3** ga yuklang. Brauzerda boshqaring yoki CLI orqali ishga tushiring.
 
 ## Tez boshlash
 
-**Kerak:** Python **3.11+** va `pip`.
-
-### 1) O‘rnatish
+**Talab:** Python 3.11+
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-
+git clone https://github.com/farrux05-ai/chumoli.git
+cd chumoli
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -U pip
-pip install chumoli                # PyPI (chiqarilgach)
-# yoki loyihadan:
-# git clone https://github.com/farrux05-ai/chumoli.git
-# cd chumoli && pip install -e .
-```
-
-### 2) UI ni ochish
-
-```bash
+pip install -e ".[dev]"
 chumoli ui
 ```
 
-- Server: **http://127.0.0.1:8000/**
-- Brauzer **o‘zi ochiladi**
+- Dashboard: http://127.0.0.1:8000/
+- API docs: http://127.0.0.1:8000/api/docs
 - To‘xtatish: `Ctrl+C`
 
-Brauzersiz faqat server:
+Brauzersiz:
 
 ```bash
 chumoli ui --no-open
@@ -58,55 +44,59 @@ chumoli ui --no-open
 chumoli-api
 ```
 
-### 3) Birinchi pipeline
+### Birinchi pipeline
 
-1. Dashboardda **+ Yangi** yoki **Ulagichlar**
-2. Manba tanlang (SQL / REST / …)
-3. Ulanishni tekshiring → jadvallarni tanlang → saqlang
-4. **Run** → **Preview** da natijani ko‘ring
+1. **+ Yangi** yoki **Ulagichlar**
+2. Manba tanlang → ulanishni tekshiring → saqlang
+3. **Run** → **Preview**
 
-Namuna (UI dagi demo tugmalar):
+UI dagi demo: SQL → DuckDB, REST (JSONPlaceholder) → DuckDB, Volume (sintetik).
 
-- SQL namunasi — tayyor SQLite → DuckDB  
-- REST namunasi — JSONPlaceholder → DuckDB  
-- Volume demo — tezlik sinovi (sintetik qatorlar)
+## Nima bor (v1)
 
----
+| Imkoniyat | Izoh |
+|-----------|------|
+| Ulagichlar | SQL, REST, Click, Payme, Uzum, sintetik volume |
+| Destinationlar | DuckDB, PostgreSQL, lokal CSV/Parquet, S3/GCS/…, ClickHouse |
+| Dashboard | Yaratish, Run, Preview, runs tarixi, scheduler |
+| Xavfsizlik | Secrets Fernet bilan shifrlangan; API kalit |
+| Bildirishnoma | Telegram (ixtiyoriy) |
+| CLI | `chumoli ui`, `list`, `run` |
 
-## Dashboard
+## Destinationlar
 
-| Bo‘lim | Vazifa |
-|--------|--------|
-| **Pipeline’lar** | Ro‘yxat, Run, Preview, tahrirlash |
-| **Ulagichlar** | Manba katalogi (SQL, REST, to‘lov tizimlari…) |
-| **Ishga tushirishlar** | Run tarixi, status, qatorlar, vaqt |
-| **Sozlamalar** | Telegram xabar, scheduler |
+| Key | Default / connection |
+|-----|----------------------|
+| `duckdb` | `~/chumoli-data/<pipeline>.duckdb` |
+| `postgresql` | SQLAlchemy URL (parol maxfiy) |
+| `filesystem` | Faqat lokal → `~/chumoli-data/exports/<pipeline>/` |
+| `s3` | `s3://` / `gs://` / `az://` … |
+| `clickhouse` | URL; `pip install "dlt[clickhouse]"` |
 
-Ma’lumot va maxfiy kalitlar shu yerda saqlanadi (loyiha papkasida emas):
+Lokal fayl va S3 katalogda **alohida**. Preview lokal eksport uchun papka yo‘li, fayllar ro‘yxati va CSV namunasi beradi (`_dlt*` metadata yashirin).
+
+## Ma’lumot qayerda
 
 ```text
-~/.chumoli/
-  chumoli_control.db    # pipeline sozlamalari
-  master.key            # shifrlash
-  api.key               # API kalit
-  data/                 # default DuckDB fayllar
-  pipelines/            # dlt holati
-  examples/             # demo ma’lumotlar
+~/.chumoli/                 # tizim (yashirin)
+  chumoli_control.db
+  master.key
+  api.key
+  pipelines/                # dlt state
+
+~/chumoli-data/             # foydalanuvchi ko‘radigan
+  <pipeline>.duckdb
+  examples/
+  exports/<pipeline>/
 ```
 
-Boshqa joyga yozish:
-
 ```bash
-export CHUMOLI_HOME=/path/to/my-data
+export CHUMOLI_HOME=/var/lib/chumoli
+export CHUMOLI_DATA=/var/lib/chumoli-data
 chumoli ui
 ```
 
----
-
-## Production notes
-
-- Run **one** uvicorn worker only (`chumoli ui` already uses `workers=1`). Multiple workers break the in-process scheduler and run locks.
-- Back up `CHUMOLI_HOME/master.key` together with the control DB — without the key, secrets cannot be decrypted.
+`master.key` ni control DB bilan birga zaxiralang — kalitsiz secrets ochilmaydi.
 
 ## CLI
 
@@ -114,70 +104,40 @@ chumoli ui
 chumoli --help
 chumoli ui                 # dashboard + brauzer
 chumoli ui --port 8080
-chumoli list               # saqlangan pipeline’lar
-chumoli run <nom>          # bir marta ishga tushirish
+chumoli list
+chumoli run <pipeline>
 ```
 
----
-
-## Ulagichlar
-
-| Tur | Misollar |
-|-----|----------|
-| Universal | PostgreSQL, MySQL, umumiy SQL, REST API |
-| To‘lov | Click, Payme, Uzum Market |
-| Sinov | Volume demo (sintetik) |
-
-**Destination:** DuckDB (default), PostgreSQL, Filesystem/S3, ClickHouse.
-
-Bo‘sh DuckDB yo‘li → avtomatik `~/.chumoli/data/<pipeline>.duckdb` (CWD ga yozilmaydi).
-
----
-
-## Sozlamalar
-
-| O‘zgaruvchi | Ma’nosi |
-|-------------|---------|
-| `CHUMOLI_HOME` | Runtime papka (default `~/.chumoli`) |
-| `CHUMOLI_API_KEY` | API kalit (bo‘sh bo‘lsa `api.key` yaratiladi) |
-
-Telegram: dashboard **Sozlamalar** da bot token + chat id. Muvaffaqiyat/xato xabarlarini pipeline sozlamasida yoqing.
-
----
-
-## Ishlab chiqish (ixtiyoriy)
-
-```bash
-git clone https://github.com/farrux05-ai/chumoli.git
-cd chumoli
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-pytest -q
-chumoli ui
-```
-
-### Docker (ixtiyoriy)
-
-Docker biladiganlar uchun:
+## Docker
 
 ```bash
 docker compose up --build
 # http://127.0.0.1:8000/
 ```
 
----
+- Bind: `127.0.0.1:8000` (tashqi tarmoq uchun reverse proxy + `CHUMOLI_API_KEY` + TLS)
+- Volume: `chumoli_data` → `/data` (`CHUMOLI_HOME` + `CHUMOLI_DATA`)
+- **Bitta** uvicorn worker — scheduler va run lock shu processda
 
-## Features (v1)
+## Muhit o‘zgaruvchilari
 
-- SQL / REST va O‘zbekiston to‘lov ulagichlari  
-- Dashboard: yaratish, Run, Preview, runs tarixi  
-- Shifrlangan secrets  
-- Interval scheduler  
-- Telegram bildirishnomalar  
-- `chumoli ui` — bir buyruqda ochiladigan interfeys  
+| O‘zgaruvchi | Default | Ma’nosi |
+|-------------|---------|---------|
+| `CHUMOLI_HOME` | `~/.chumoli` | Control DB, kalitlar, dlt state |
+| `CHUMOLI_DATA` | `~/chumoli-data` | DuckDB va lokal eksportlar |
+| `CHUMOLI_API_KEY` | (avto `api.key`) | API autentifikatsiya |
 
----
+Telegram: dashboard **Sozlamalar** → bot token + chat id.
 
-## License
+## Ishlab chiqish
+
+```bash
+pip install -e ".[dev]"
+PYTHONPATH=src python -m pytest tests/ -q
+```
+
+CI (GitHub Actions): har push/PR da Python 3.11 va 3.12 da testlar + Docker image build.
+
+## Litsenziya
 
 Apache-2.0 · [GitHub](https://github.com/farrux05-ai/chumoli)

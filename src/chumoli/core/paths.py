@@ -8,13 +8,13 @@ Runtime fayllar ikki joyda:
     chumoli_control.db
     master.key
     api.key
-    pipelines/            # dlt working dir / schema state
-    exports/              # filesystem destination
+    pipelines/            # dlt working dir / schema state + _dlt metadata
 
-  ~/chumoli-data/         — foydalanuvchi ko'radigan DuckDB va demo fayllar
+  ~/chumoli-data/         — foydalanuvchi ko'radigan ma'lumotlar
     <pipeline>.duckdb
     examples/
     warehouse.duckdb
+    exports/<pipeline>/   # lokal filesystem destination (CSV/Parquet)
 """
 
 from __future__ import annotations
@@ -25,30 +25,25 @@ from pathlib import Path
 
 _PIPELINE_NAME_SAFE = re.compile(r"[^a-zA-Z0-9._-]+")
 
+# Cloud / object-storage URL schemes (not local paths)
+_REMOTE_SCHEMES = ("s3://", "gs://", "gcs://", "az://", "abfss://", "hf://", "file://")
+
 
 def chumoli_home() -> Path:
     """Root for control DB, keys, pipelines state (hidden).
 
     Resolution order:
       1. $CHUMOLI_HOME
-      2. $UZPIPE_HOME (legacy rename compatibility)
-      3. ~/.chumoli, or existing ~/.uzpipe if new dir not created yet
+      2. ~/.chumoli
     """
     raw = os.environ.get("CHUMOLI_HOME", "").strip()
     if raw:
         return Path(raw).expanduser().resolve()
-    legacy = os.environ.get("UZPIPE_HOME", "").strip()
-    if legacy:
-        return Path(legacy).expanduser().resolve()
-    new_home = Path.home() / ".chumoli"
-    old_home = Path.home() / ".uzpipe"
-    if not new_home.exists() and old_home.exists():
-        return old_home.resolve()
-    return new_home.resolve()
+    return (Path.home() / ".chumoli").resolve()
 
 
 def user_data_dir() -> Path:
-    """Visible DuckDB / demo root: ~/chumoli-data (user can find it).
+    """Visible DuckDB / demo / exports root: ~/chumoli-data (user can find it).
 
     Override with $CHUMOLI_DATA for tests or custom installs.
     """
@@ -73,19 +68,20 @@ def examples_dir() -> Path:
 
 
 def exports_dir() -> Path:
-    return chumoli_home() / "exports"
+    """User-visible local export root: ~/chumoli-data/exports/"""
+    return user_data_dir() / "exports"
 
 
 def ensure_runtime_dirs() -> Path:
     """Create system home + user-visible data dirs."""
     home = chumoli_home()
     home.mkdir(mode=0o700, parents=True, exist_ok=True)
-    for sub in (pipelines_dir(), exports_dir()):
-        sub.mkdir(mode=0o700, parents=True, exist_ok=True)
+    pipelines_dir().mkdir(mode=0o700, parents=True, exist_ok=True)
     # User-visible data (more open permissions so analyst can browse)
     ud = user_data_dir()
     ud.mkdir(mode=0o755, parents=True, exist_ok=True)
     examples_dir().mkdir(mode=0o755, parents=True, exist_ok=True)
+    exports_dir().mkdir(mode=0o755, parents=True, exist_ok=True)
     return home
 
 
@@ -127,18 +123,28 @@ def resolve_duckdb_path(connection: str, pipeline_name: str | None = None) -> st
 
 
 def default_filesystem_path(pipeline_name: str) -> str:
-    """Local export folder: $CHUMOLI_HOME/exports/<pipeline>/"""
+    """Local export folder: ~/chumoli-data/exports/<pipeline>/ (user-visible)."""
     ensure_runtime_dirs()
     path = exports_dir() / safe_pipeline_filename(pipeline_name)
-    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.mkdir(mode=0o755, parents=True, exist_ok=True)
     return str(path.resolve())
 
 
-def resolve_filesystem_url(connection: str | None, pipeline_name: str) -> str:
-    """Normalize filesystem destination URL/path.
+def is_remote_url(url: str) -> bool:
+    lower = (url or "").strip().lower()
+    return lower.startswith(_REMOTE_SCHEMES)
 
-    - empty → exports/<pipeline>/
-    - s3:// gs:// az:// hf:// → as-is
+
+def resolve_filesystem_url(
+    connection: str | None,
+    pipeline_name: str,
+    *,
+    allow_remote: bool = False,
+) -> str:
+    """Normalize local filesystem destination path.
+
+    - empty → ~/chumoli-data/exports/<pipeline>/
+    - remote schemes → only if allow_remote=True (else ValueError)
     - ~/... → expand
     - relative → under exports/
     - absolute local path → as-is (mkdir parent)
@@ -148,12 +154,32 @@ def resolve_filesystem_url(connection: str | None, pipeline_name: str) -> str:
     if not raw:
         return default_filesystem_path(pipeline_name)
 
-    lower = raw.lower()
-    if lower.startswith(("s3://", "gs://", "gcs://", "az://", "abfss://", "hf://", "file://")):
+    if is_remote_url(raw):
+        if not allow_remote:
+            raise ValueError(
+                "Lokal «Filesystem» destination uchun s3:// / gs:// ishlatilmaydi. "
+                "Bulut uchun «S3 / Object storage» destination tanlang."
+            )
         return raw
 
     path = Path(raw).expanduser()
     if not path.is_absolute():
         path = exports_dir() / path
-    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.mkdir(mode=0o755, parents=True, exist_ok=True)
     return str(path.resolve())
+
+
+def resolve_s3_url(connection: str | None) -> str:
+    """Normalize object-storage URL — remote schemes only, required."""
+    raw = (connection or "").strip()
+    if not raw:
+        raise ValueError(
+            "S3 / Object storage uchun bucket URL majburiy "
+            "(masalan s3://bucket/prefix yoki gs://bucket/prefix)."
+        )
+    if not is_remote_url(raw):
+        raise ValueError(
+            f"S3 destination faqat bulut URL qabul qiladi (s3://, gs://, …). "
+            f"Lokal papka uchun «Lokal fayl» destination tanlang. Berilgan: {raw!r}"
+        )
+    return raw

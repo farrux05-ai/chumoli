@@ -65,23 +65,45 @@ def test_exports_dir_and_filesystem_resolve(tmp_path, monkeypatch) -> None:
         default_filesystem_path,
         exports_dir,
         resolve_filesystem_url,
+        resolve_s3_url,
+        user_data_dir,
     )
 
     monkeypatch.setenv("CHUMOLI_HOME", str(tmp_path / "h"))
     monkeypatch.setenv("CHUMOLI_DATA", str(tmp_path / "h" / "data"))
     p = default_filesystem_path("demo_rest")
+    # Local exports live under user-visible data dir, not hidden .chumoli
     assert "exports" in p
+    assert str(user_data_dir()) in p
     assert p.endswith("demo_rest") or p.rstrip("/").endswith("demo_rest")
     assert Path(p).is_dir()
 
     rel = resolve_filesystem_url("my_out", "p1")
     assert str(exports_dir()) in rel
 
-    s3 = resolve_filesystem_url("s3://bucket/prefix", "p1")
-    assert s3 == "s3://bucket/prefix"
+    # Local filesystem must reject remote URLs
+    try:
+        resolve_filesystem_url("s3://bucket/prefix", "p1")
+        raise AssertionError("local filesystem should reject s3://")
+    except ValueError:
+        pass
+
+    assert resolve_filesystem_url("s3://bucket/prefix", "p1", allow_remote=True) == "s3://bucket/prefix"
+    assert resolve_s3_url("s3://bucket/prefix") == "s3://bucket/prefix"
+    try:
+        resolve_s3_url("")
+        raise AssertionError("s3 empty should fail")
+    except ValueError:
+        pass
+    try:
+        resolve_s3_url("/tmp/local")
+        raise AssertionError("s3 local path should fail")
+    except ValueError:
+        pass
 
     empty = resolve_filesystem_url("", "orders_pipe")
     assert "orders_pipe" in empty
+    assert str(user_data_dir()) in empty
 
 
 def test_destination_file_format_validation() -> None:
@@ -99,7 +121,6 @@ def test_default_user_data_is_visible(monkeypatch) -> None:
     """Without env override, DuckDB lives in ~/chumoli-data (not hidden .chumoli)."""
     monkeypatch.delenv("CHUMOLI_HOME", raising=False)
     monkeypatch.delenv("CHUMOLI_DATA", raising=False)
-    monkeypatch.delenv("UZPIPE_HOME", raising=False)
     path = default_duckdb_path("orders")
     assert "chumoli-data" in path
     assert ".chumoli" not in path
