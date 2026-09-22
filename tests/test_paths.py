@@ -121,7 +121,6 @@ def test_default_user_data_is_visible(monkeypatch) -> None:
     """Without env override, DuckDB lives in ~/chumoli-data (not hidden .chumoli)."""
     monkeypatch.delenv("CHUMOLI_HOME", raising=False)
     monkeypatch.delenv("CHUMOLI_DATA", raising=False)
-    monkeypatch.delenv("UZPIPE_HOME", raising=False)
     path = default_duckdb_path("orders")
     assert "chumoli-data" in path
     assert ".chumoli" not in path

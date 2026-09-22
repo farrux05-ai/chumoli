@@ -72,8 +72,6 @@ UI/API
 | `$CHUMOLI_DATA` (default `~/chumoli-data`) | DuckDB files, local CSV/Parquet exports |
 | `~/chumoli-data/exports/<pipeline>/` | Default local filesystem destination |
 
-Legacy: `$UZPIPE_HOME` / `~/.uzpipe` still resolved if present (rename compatibility).
-
 ## Destinations (MVP set)
 
 | Catalog key | dlt backend | Connection |

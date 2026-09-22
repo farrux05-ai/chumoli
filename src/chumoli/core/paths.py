@@ -34,20 +34,12 @@ def chumoli_home() -> Path:
 
     Resolution order:
       1. $CHUMOLI_HOME
-      2. $UZPIPE_HOME (legacy rename compatibility)
-      3. ~/.chumoli, or existing ~/.uzpipe if new dir not created yet
+      2. ~/.chumoli
     """
     raw = os.environ.get("CHUMOLI_HOME", "").strip()
     if raw:
         return Path(raw).expanduser().resolve()
-    legacy = os.environ.get("UZPIPE_HOME", "").strip()
-    if legacy:
-        return Path(legacy).expanduser().resolve()
-    new_home = Path.home() / ".chumoli"
-    old_home = Path.home() / ".uzpipe"
-    if not new_home.exists() and old_home.exists():
-        return old_home.resolve()
-    return new_home.resolve()
+    return (Path.home() / ".chumoli").resolve()
 
 
 def user_data_dir() -> Path:
