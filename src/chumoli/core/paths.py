@@ -8,19 +8,21 @@ Runtime fayllar ikki joyda:
     chumoli_control.db
     master.key
     api.key
-    pipelines/            # dlt working dir / schema state + _dlt metadata
+    pipelines/            # dlt working dir / schema state
+    fs_staging/<pipeline>/  # dlt filesystem load + _dlt_* metadata (hidden)
 
   ~/chumoli-data/         — foydalanuvchi ko'radigan ma'lumotlar
     <pipeline>.duckdb
     examples/
     warehouse.duckdb
-    exports/<pipeline>/   # lokal filesystem destination (CSV/Parquet)
+    exports/<pipeline>/   # clean tables only (no _dlt_*) after publish
 """
 
 from __future__ import annotations
 
 import os
 import re
+import shutil
 from pathlib import Path
 
 _PIPELINE_NAME_SAFE = re.compile(r"[^a-zA-Z0-9._-]+")
@@ -129,6 +131,94 @@ def default_filesystem_path(pipeline_name: str) -> str:
     path.mkdir(mode=0o755, parents=True, exist_ok=True)
     return str(path.resolve())
 
+
+
+def fs_staging_dir(pipeline_name: str) -> Path:
+    """Hidden dlt load root: ~/.chumoli/fs_staging/<pipeline>/
+
+    dlt writes _dlt_loads / _dlt_version / data here. User never browses this.
+    """
+    ensure_runtime_dirs()
+    path = chumoli_home() / "fs_staging" / safe_pipeline_filename(pipeline_name)
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return path
+
+
+def is_dlt_metadata_name(name: str) -> bool:
+    """True for dlt internal folders/files that must not appear in user exports."""
+    n = (name or "").strip()
+    if not n:
+        return True
+    lower = n.lower()
+    if lower.startswith("_dlt") or lower.startswith(".dlt"):
+        return True
+    if lower in ("init", ".init"):
+        return True
+    return False
+
+
+def publish_filesystem_export(
+    staging: Path,
+    visible: Path,
+    *,
+    replace: bool = True,
+) -> list[str]:
+    """Copy only data tables from staging → visible (skip _dlt_* metadata).
+
+    Returns list of published table/folder names.
+    """
+    staging = Path(staging)
+    visible = Path(visible)
+    if not staging.is_dir():
+        return []
+    visible.mkdir(mode=0o755, parents=True, exist_ok=True)
+    published: list[str] = []
+    for item in sorted(staging.iterdir(), key=lambda x: x.name):
+        if is_dlt_metadata_name(item.name):
+            continue
+        dest = visible / item.name
+        if item.is_dir():
+            if replace and dest.exists():
+                shutil.rmtree(dest)
+            if dest.exists():
+                # append / merge: copy files on top
+                for root, _dirs, files in os.walk(item):
+                    rel = Path(root).relative_to(item)
+                    target_dir = dest / rel
+                    target_dir.mkdir(parents=True, exist_ok=True)
+                    for f in files:
+                        shutil.copy2(Path(root) / f, target_dir / f)
+            else:
+                shutil.copytree(item, dest)
+            published.append(item.name)
+        elif item.is_file():
+            shutil.copy2(item, dest)
+            published.append(item.name)
+    # Remove stale tables in visible that are no longer in staging (replace only)
+    if replace:
+        staging_names = {
+            i.name for i in staging.iterdir() if not is_dlt_metadata_name(i.name)
+        }
+        for item in list(visible.iterdir()):
+            if is_dlt_metadata_name(item.name):
+                # clean leftover metadata if user previously wrote dlt into visible
+                if item.is_dir():
+                    shutil.rmtree(item, ignore_errors=True)
+                else:
+                    try:
+                        item.unlink()
+                    except OSError:
+                        pass
+                continue
+            if item.name not in staging_names and item.name not in published:
+                if item.is_dir():
+                    shutil.rmtree(item, ignore_errors=True)
+                else:
+                    try:
+                        item.unlink()
+                    except OSError:
+                        pass
+    return published
 
 def is_remote_url(url: str) -> bool:
     lower = (url or "").strip().lower()

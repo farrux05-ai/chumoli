@@ -111,10 +111,14 @@ def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
         connection = resolve_duckdb_path(connection or "", config.name)
 
     if dest_key == "filesystem":
-        # Local only — data under ~/chumoli-data/exports/; dlt state stays in pipelines_dir
-        bucket_url = resolve_filesystem_url(connection, config.name, allow_remote=False)
-        # Clean layout: one folder per table; _dlt_* metadata still written by dlt under dataset
-        destination: Any = dlt.destinations.filesystem(
+        # dlt writes to HIDDEN staging (~/.chumoli/fs_staging/<pipeline>/)
+        # including _dlt_* metadata. After load we publish only data tables to
+        # the user-visible path (connection or ~/chumoli-data/exports/<pipeline>/).
+        from chumoli.core.paths import fs_staging_dir
+
+        staging = fs_staging_dir(config.name)
+        bucket_url = str(staging)
+        destination = dlt.destinations.filesystem(
             bucket_url=bucket_url,
             layout="{table_name}/{load_id}.{file_id}.{ext}",
         )
@@ -442,6 +446,42 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
     )
     if row_counts:
         _set_run_step(name, "count", rows_so_far=sum(row_counts.values()))
+
+    if load_succeeded and dest.connector == "filesystem":
+        # Publish data-only tables to user-visible folder (no _dlt_* metadata)
+        from chumoli.core.paths import (
+            fs_staging_dir,
+            publish_filesystem_export,
+            resolve_filesystem_url,
+        )
+
+        try:
+            staging_root = fs_staging_dir(name)
+            dataset = (dest.dataset_name or "raw").strip() or "raw"
+            # dlt layout: <bucket>/<dataset>/<table>/…
+            staging_data = staging_root / dataset
+            if not staging_data.is_dir():
+                staging_data = staging_root
+            visible = Path(
+                resolve_filesystem_url(
+                    dest.connection or "",
+                    name,
+                    allow_remote=False,
+                )
+            )
+            # Put clean tables at top of user-chosen folder (not nested dataset+_dlt)
+            replace = stored.config.write_disposition.value == "replace"
+            published = publish_filesystem_export(
+                staging_data, visible, replace=replace
+            )
+            log.info(
+                "filesystem_published",
+                staging=str(staging_data),
+                visible=str(visible),
+                tables=published,
+            )
+        except Exception as pub_exc:
+            log.warning("filesystem_publish_failed", error=str(pub_exc)[:300])
 
     if load_succeeded:
         log.info("step_quality_start", tables=list(row_counts.keys()))
