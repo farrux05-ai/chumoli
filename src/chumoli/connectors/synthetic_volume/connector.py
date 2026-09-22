@@ -59,7 +59,23 @@ MANIFEST = ConnectorManifest(
 )
 
 
-@dlt.resource(name="events", write_disposition="replace", primary_key="event_id")
+# Explicit columns match Parquet schema — avoids dlt "arrow schema vs dlt schema" WARNING
+_EVENTS_COLUMNS = {
+    "event_id": {"data_type": "bigint", "nullable": False},
+    "batch": {"data_type": "text", "nullable": False},
+    "user_id": {"data_type": "bigint", "nullable": False},
+    "amount": {"data_type": "double", "nullable": False},
+    "status": {"data_type": "text", "nullable": False},
+    "ts": {"data_type": "text", "nullable": False},
+}
+
+
+@dlt.resource(
+    name="events",
+    write_disposition="replace",
+    primary_key="event_id",
+    columns=_EVENTS_COLUMNS,
+)
 def _events_from_parquet(parquet_path: str) -> Iterator[Any]:
     """Yield Arrow record batches from a pre-built Parquet file."""
     import pyarrow.parquet as pq

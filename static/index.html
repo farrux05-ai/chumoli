@@ -443,29 +443,21 @@ function qualityFailDetails(r){
 }
 
 function lastRunSummary(lr){
+  /* Holat ustuni: faqat status badge (+ tezlik).
+     Qatorlar / Vaqt alohida ustunlarda — takrorlamaymiz. */
   if(!lr) return '<span class="badge dim">Hech qachon</span>';
   const badge=lastRunBadge(lr);
   if(!lr.success) return badge;
-  const parts=[];
-  if(lr.new_rows!=null&&lr.total_rows!=null){
-    if(!lr.is_first_run&&lr.new_rows<lr.total_rows){
-      parts.push(`<span class="metric-new">+${fmtRows(lr.new_rows)} yangi</span>`);
-      parts.push(`<span class="metric-dim">${fmtRows(lr.total_rows)} jami</span>`);
-    }else{
-      parts.push(`<span class="metric-new">${fmtRows(lr.total_rows)} qator</span>`);
-    }
-  }
+  let speed='';
   if(lr.rows_per_second>0){
-    parts.push(`<span class="metric-speed">${Math.round(lr.rows_per_second).toLocaleString()} q/s</span>`);
+    speed=`<div class="metric-speed" style="font-size:11px;margin-top:2px">${Math.round(lr.rows_per_second).toLocaleString()} q/s</div>`;
   }
-  if(lr.duration_seconds){
-    parts.push(`<span class="metric-time">${fmtDur(lr.duration_seconds)}</span>`);
-  }
+  let ram='';
   if(lr.peak_memory_mb>0){
     const mem=fmtMem(lr.peak_memory_mb);
-    if(mem) parts.push(`<span class="metric-ram">${mem} RAM</span>`);
+    if(mem) ram=`<div class="metric-ram" style="margin-top:2px">${mem} RAM</div>`;
   }
-  return `${badge} <span class="run-metrics">${parts.join(' · ')}</span>`;
+  return badge+speed+ram;
 }
 
 function rowsNewTotal(r){
