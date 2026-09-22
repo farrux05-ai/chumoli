@@ -53,13 +53,12 @@ packages = ["src/chumoli"]
 [tool.hatch.build.targets.wheel.sources]
 "src/chumoli" = "chumoli"
 
-[tool.hatch.build.targets.wheel.force-include]
-"static" = "chumoli/static"
+# Dashboard lives in src/chumoli/static (packaged with the wheel).
+# Do NOT force-include repo-root static/ — missing dir breaks editable install.
 
 [tool.hatch.build.targets.sdist]
 include = [
     "src/chumoli",
-    "static",
     "README.md",
     "pyproject.toml",
 ]
