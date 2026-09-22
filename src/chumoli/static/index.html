@@ -727,12 +727,19 @@ function renderPipelines(){
 async function previewPipeline(name){
   try{
     const res=await api('/api/pipelines/'+encodeURIComponent(name)+'/preview?limit=10');
-    if(res.error&&(!res.tables||!Object.keys(res.tables).length)){
-      toast(res.error,'err'); return;
-    }
     const tables=res.tables||{};
     const names=Object.keys(tables);
-    if(!names.length){ toast("Ko'rsatish uchun ma'lumot yo'q",'err'); return; }
+    const files=res.files||[];
+    const exportPath=res.export_path||null;
+    const kind=res.kind||null;
+
+    // Filesystem/S3: show path even when no table sample yet
+    if(res.error&&!names.length&&!exportPath&&!files.length){
+      toast(res.error,'err'); return;
+    }
+    if(!names.length&&!exportPath&&!files.length){
+      toast("Ko'rsatish uchun ma'lumot yo'q",'err'); return;
+    }
 
     const pipe=pipelines.find(p=>p.name===name);
     const lr=pipe&&pipe.last_run;
@@ -743,8 +750,42 @@ async function previewPipeline(name){
     const body=document.getElementById('drawer-body');
     const foot=document.getElementById('drawer-foot');
     let html='';
+
+    // Local filesystem / S3: export path + one-click copy
+    if(exportPath){
+      const label=kind==='s3'?'Bucket URL':'Eksport papkasi';
+      html+=`<div style="margin-bottom:16px;padding:12px 14px;background:var(--surface2,#1a1a1a);border-radius:8px;border:1px solid var(--border,#333)">
+        <div class="section-title" style="margin-bottom:6px">${label}</div>
+        <div class="mono" style="font-size:13px;word-break:break-all;margin-bottom:10px" id="export-path-text">${esc(exportPath)}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" type="button" id="btn-copy-export">📋 Nusxa olish</button>
+          ${kind==='filesystem'?`<a class="btn btn-ghost btn-sm" href="file://${esc(exportPath)}" title="Ba'zi brauzerlar file:// ni bloklaydi">📂 Papkani ochish</a>`:''}
+        </div>
+        <div style="font-size:11px;color:var(--faint);margin-top:8px">_dlt* metadata yashirin (pipelines); bu yerda faqat ma'lumot fayllari.</div>
+      </div>`;
+    }
+
+    if(files.length){
+      html+=`<div style="margin-bottom:18px">
+        <div class="section-title">Fayllar (${files.length})</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Fayl</th><th>Hajm</th></tr></thead>
+            <tbody>${files.slice(0,40).map(f=>`<tr>
+              <td class="mono" style="font-size:12px">${esc(f.relative||f.name||f.path)}</td>
+              <td class="mono">${f.size!=null?(f.size<1024?f.size+' B':(f.size/1024).toFixed(1)+' KB'):'—'}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </div>
+      </div>`;
+    }
+
+    if(res.error&&names.length){
+      html+=`<div class="field-err" style="margin-bottom:12px">${esc(res.error)}</div>`;
+    }
+
     const schemaNames=[...new Set([...Object.keys(colCounts),...Object.keys(rowCounts),...names])];
-    if(schemaNames.length){
+    if(schemaNames.length&&!kind){
       html+=`<div style="margin-bottom:18px">
         <div class="section-title">Schema</div>
         <div class="table-wrap">
@@ -771,8 +812,9 @@ async function previewPipeline(name){
       }
       const cols=info.columns||[];
       const rows=info.rows||[];
+      const fileHint=info.file?` · ${info.file}`:'';
       html+=`<div style="margin-bottom:20px">
-        <div class="section-title">${esc(tbl)} — ${rows.length} qator</div>
+        <div class="section-title">${esc(tbl)} — ${rows.length} qator${esc(fileHint)}</div>
         <div class="table-wrap" style="overflow-x:auto;max-height:280px">
           <table>
             <thead><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead>
@@ -787,6 +829,17 @@ async function previewPipeline(name){
     }
     body.innerHTML=html;
     foot.innerHTML=`<button class="btn btn-ghost" onclick="closeDrawer()">Yopish</button>`;
+    const copyBtn=document.getElementById('btn-copy-export');
+    if(copyBtn&&exportPath){
+      copyBtn.onclick=async()=>{
+        try{
+          await navigator.clipboard.writeText(exportPath);
+          toast('Yo\'l nusxalandi','ok');
+        }catch(_){
+          toast(exportPath,'ok');
+        }
+      };
+    }
     openDrawer();
   }catch(e){ toast(e.message,'err'); }
 }
@@ -1827,7 +1880,7 @@ function renderStepDestAndSave(body,foot){
     const wrap=document.getElementById('dest-conn-wrap');
     const fmtWrap=document.getElementById('dest-format-wrap');
     const connEl=document.getElementById('f-dest-conn');
-    const isFs=key==='filesystem';
+    const isFs=key==='filesystem'||key==='s3';
     // Persist previous destination's connection before switching
     if(connEl && _lastDestKey && _lastDestKey!==key){
       draft._destConnByKey[_lastDestKey]=connEl.value||'';
@@ -2042,14 +2095,14 @@ async function savePipeline(){
     dest={connector:destKey,dataset_name:(document.getElementById('f-dataset')||{}).value||'raw'};
     // Only connection for the selected dest key (never another destination's URL)
     let connVal='';
-    if(destConnEl && (destConnEl.offsetParent!==null || destKey==='filesystem')){
+    if(destConnEl && (destConnEl.offsetParent!==null || destKey==='filesystem' || destKey==='s3')){
       connVal=(destConnEl.value||'').trim();
     }
     if(!connVal && draft._destConnByKey && Object.prototype.hasOwnProperty.call(draft._destConnByKey, destKey)){
       connVal=String(draft._destConnByKey[destKey]||'').trim();
     }
     if(connVal) dest.connection=connVal;
-    if(destKey==='filesystem'){
+    if(destKey==='filesystem'||destKey==='s3'){
       const ff=(document.getElementById('f-file-format')||{}).value||'csv';
       dest.file_format=ff;
     }

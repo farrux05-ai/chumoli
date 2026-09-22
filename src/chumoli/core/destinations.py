@@ -9,7 +9,8 @@ NEGA FAQAT SHU TO'RTALIK (BigQuery/Snowflake yo'q)
 Strategiya: sifat > son, UZ bozorida haqiqiy ehtiyoj.
   - DuckDB — local MVP / dev (default)
   - PostgreSQL — app DB / warehouse (eng ko'p so'raladi)
-  - Filesystem — local path, S3, GCS (CSV/Parquet dump)
+  - Filesystem — faqat lokal papka (CSV/Parquet) — foydalanuvchi ko'radigan joy
+  - S3 / object storage — s3:// gs:// az:// (alohida katalog)
   - ClickHouse — UZ data engineer stackida tez-tez uchraydi
     (ixtiyoriy extra: pip install "dlt[clickhouse]")
 
@@ -20,6 +21,9 @@ mijoz so'raganda qo'shiladi — katalog to'ldirish uchun emas.
 (masalan postgresql → postgres) pipeline_runner._DLT_DEST_ALIASES
 orqali map qilinadi. Catalog key o'zgarmaydi (saqlangan pipeline'lar
 va testlar uchun barqaror).
+
+`filesystem` va `s3` ikkalasi ham dlt.destinations.filesystem ga map
+qilinadi; farq — UI va default path / credentials.
 """
 
 from __future__ import annotations
@@ -48,6 +52,9 @@ class DestinationSpec(BaseModel):
 # shifrlaydi, shu kalit ham shu yerda yashirinadi.
 DEST_CONNECTION_SECRET_KEY = "_destination_connection"
 
+# Catalog keys that use dlt.destinations.filesystem under the hood.
+FILESYSTEM_DEST_KEYS = frozenset({"filesystem", "s3"})
+
 
 def _probe_dlt_destination(attr: str) -> bool:
     """Return True if dlt.destinations.<attr> is importable without extra install error."""
@@ -64,8 +71,11 @@ def _probe_dlt_destination(attr: str) -> bool:
 def is_destination_available(key: str) -> bool:
     """Whether the dlt backend for this catalog key is installed."""
     # Catalog key → attribute on dlt.destinations
-    attr = {"postgresql": "postgres"}.get(key, key)
-    if key in ("duckdb", "filesystem", "postgresql"):
+    attr = {
+        "postgresql": "postgres",
+        "s3": "filesystem",  # object storage uses same dlt destination
+    }.get(key, key)
+    if key in ("duckdb", "filesystem", "postgresql", "s3"):
         # Core MVP destinations — always listed; runtime will surface real errors
         return True
     return _probe_dlt_destination(attr)
@@ -77,8 +87,8 @@ DESTINATION_CATALOG: list[DestinationSpec] = [
         label="DuckDB",
         description="Local analytical DB — MVP default",
         needs_connection=False,
-        connection_placeholder="(bo'sh = $CHUMOLI_HOME/data/<pipeline>.duckdb)",
-        connection_help="Ixtiyoriy. Bo'sh qoldirilsa fayl $CHUMOLI_HOME/data/<pipeline_nomi>.duckdb ga yoziladi (loyiha papkasiga emas).",
+        connection_placeholder="(bo'sh = ~/chumoli-data/<pipeline>.duckdb)",
+        connection_help="Ixtiyoriy. Bo'sh qoldirilsa fayl ~/chumoli-data/<pipeline_nomi>.duckdb ga yoziladi.",
         connection_label="Fayl yo'li (ixtiyoriy)",
     ),
     DestinationSpec(
@@ -92,12 +102,27 @@ DESTINATION_CATALOG: list[DestinationSpec] = [
     ),
     DestinationSpec(
         key="filesystem",
-        label="Fayl (CSV / Parquet)",
-        description="Lokal papka yoki s3:// — CSV (Excel) yoki Parquet",
+        label="Lokal fayl (CSV / Parquet)",
+        description="Faqat lokal papka — Excel/Parquet. dlt metadata alohida yashirin joyda.",
         needs_connection=False,
-        connection_placeholder="Bo'sh = ~/.chumoli/exports/<pipeline>/  yoki  s3://bucket/prefix",
-        connection_help="Ixtiyoriy. Bo'sh qoldirilsa $CHUMOLI_HOME/exports/<pipeline>/ ga yoziladi. S3/GCS ham mumkin.",
-        connection_label="Papka yoki bucket URL",
+        connection_placeholder="Bo'sh = ~/chumoli-data/exports/<pipeline>/",
+        connection_help=(
+            "Ixtiyoriy. Bo'sh = ~/chumoli-data/exports/<pipeline>/ (ko'rinadigan papka). "
+            "S3 uchun alohida «S3 / Object storage» destination tanlang."
+        ),
+        connection_label="Lokal papka yo'li",
+    ),
+    DestinationSpec(
+        key="s3",
+        label="S3 / Object storage",
+        description="s3:// gs:// az:// — bulutli object storage (CSV/Parquet)",
+        needs_connection=True,
+        connection_placeholder="s3://bucket/prefix  yoki  gs://bucket/prefix",
+        connection_help=(
+            "Majburiy. s3://, gs://, gcs://, az://, abfss:// yoki hf://. "
+            "Credentials muhit o'zgaruvchilari yoki AWS/GCP default chain orqali."
+        ),
+        connection_label="Bucket URL",
     ),
     DestinationSpec(
         key="clickhouse",
@@ -135,3 +160,8 @@ def get_destination(key: str) -> DestinationSpec | None:
 
 def known_destination_keys() -> set[str]:
     return {d.key for d in DESTINATION_CATALOG}
+
+
+def is_filesystem_like(key: str) -> bool:
+    """True for local filesystem or object-storage (s3) catalog keys."""
+    return key in FILESYSTEM_DEST_KEYS

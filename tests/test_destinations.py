@@ -16,7 +16,7 @@ from chumoli.store.control_store import ControlStore
 
 def test_catalog_has_mvp_destinations() -> None:
     keys = {d["key"] for d in all_destinations()}
-    assert keys >= {"duckdb", "postgresql", "filesystem", "clickhouse"}
+    assert keys >= {"duckdb", "postgresql", "filesystem", "s3", "clickhouse"}
     pg = get_destination("postgresql")
     assert pg is not None
     assert pg.needs_connection is True
@@ -75,4 +75,5 @@ def test_dlt_dest_alias_postgresql_to_postgres() -> None:
     # duckdb / filesystem / clickhouse use same name in dlt
     assert "duckdb" not in _DLT_DEST_ALIASES
     assert "filesystem" not in _DLT_DEST_ALIASES
+    assert _DLT_DEST_ALIASES.get("s3") == "filesystem"
     assert "clickhouse" not in _DLT_DEST_ALIASES
