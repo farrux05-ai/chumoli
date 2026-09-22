@@ -103,14 +103,11 @@ DESTINATION_CATALOG: list[DestinationSpec] = [
     DestinationSpec(
         key="filesystem",
         label="Lokal fayl (CSV / Parquet)",
-        description="Faqat lokal papka — Excel/Parquet. dlt metadata alohida yashirin joyda.",
+        description="Path kiritish shart emas — ~/chumoli-data/exports/<pipeline>/ ga yoziladi.",
         needs_connection=False,
-        connection_placeholder="Bo'sh = ~/chumoli-data/exports/<pipeline>/",
-        connection_help=(
-            "Ixtiyoriy. Bo'sh = ~/chumoli-data/exports/<pipeline>/ (ko'rinadigan papka). "
-            "S3 uchun alohida «S3 / Object storage» destination tanlang."
-        ),
-        connection_label="Lokal papka yo'li",
+        connection_placeholder="",
+        connection_help="Avtomatik ~/chumoli-data/exports/<pipeline>/. S3 uchun alohida destination.",
+        connection_label="Lokal papka",
     ),
     DestinationSpec(
         key="s3",

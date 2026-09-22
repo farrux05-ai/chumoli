@@ -39,6 +39,21 @@ def configure_logging() -> None:
         force=True,
     )
 
+    # dlt + pyarrow: nullable/precision hints vs Arrow schema farqi —
+    # load ishlayveradi, lekin har batch da WARNING shovqin chiqaradi.
+    # See dlt-hub/dlt#2788, #3581. INFO da to'liq log qoladi.
+    class _DltArrowSchemaHintNoiseFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            msg = record.getMessage()
+            if "when merging arrow schema with dlt schema" in msg:
+                return False
+            if "arrow schema and data were unmodified" in msg:
+                return False
+            return True
+
+    for name in ("dlt", "dlt.extract", "dlt.extract.extractors"):
+        logging.getLogger(name).addFilter(_DltArrowSchemaHintNoiseFilter())
+
     shared_processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
