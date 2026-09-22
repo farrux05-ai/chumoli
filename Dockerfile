@@ -15,17 +15,18 @@ COPY requirements.txt pyproject.toml README.md ./
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
+# Package includes dashboard under src/chumoli/static/
 COPY src ./src
-COPY static ./static
 
 # Install package so `import chumoli` works
 RUN pip install --no-cache-dir --no-deps .
 
 ENV CHUMOLI_HOME=/data
+ENV CHUMOLI_DATA=/data/chumoli-data
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/src
 
-RUN mkdir -p /data
+RUN mkdir -p /data /data/chumoli-data
 VOLUME ["/data"]
 
 EXPOSE 8000

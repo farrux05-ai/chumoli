@@ -79,20 +79,16 @@ app.add_middleware(
 def _static_dir() -> Path:
     """Locate dashboard static/ (index.html).
 
-    Prefer package-local ``chumoli/static`` (editable + wheel), then walk
-    up to repo-root/static, then CWD and Docker paths.
+    Canonical path: package-local ``chumoli/static`` (editable install + wheel).
+    Fallback: CWD/static for rare layouts only.
     """
     here = Path(__file__).resolve().parent
     pkg_root = here.parent  # .../chumoli (src/chumoli or site-packages/chumoli)
 
     candidates: list[Path] = [
         pkg_root / "static",  # src/chumoli/static or installed package
-        Path("/app/static"),
         Path.cwd() / "static",
     ]
-    # Walk up: repo-root/static when developing from checkout
-    for parent in here.parents:
-        candidates.append(parent / "static")
 
     seen: set[str] = set()
     for p in candidates:

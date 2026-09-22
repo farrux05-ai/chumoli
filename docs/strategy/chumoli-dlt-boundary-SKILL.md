@@ -46,7 +46,7 @@ Note on `dlthub.com/products/orchestration`: the domain looks commercial, but `P
 Verified 2026-09-17 by actual install:
 
 ```
-pip install "dlt[hub]"   # installs dlthub, not marimo
+pip install "dlt[hub]"   # installs dlthub, not static HTML dashboard
 pip show dlthub          # "commercial extension... requires a license"
 dlt dashboard --edit     # without hub → warning to install dlt[hub]
 ```

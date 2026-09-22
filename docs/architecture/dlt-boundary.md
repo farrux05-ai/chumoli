@@ -49,7 +49,7 @@ paketning o'ziga qarang.**
 **Tekshirish dalili (2026-09-17, amalda bajarilgan):**
 ```
 $ pip install "dlt[hub]"
-# -> dlthub-0.30.0, dlthub-client-0.28.4 o'rnatiladi (marimo EMAS)
+# -> dlthub-0.30.0, dlthub-client-0.28.4 o'rnatiladi (ochiq dashboard EMAS)
 
 $ pip show dlthub
 # Requires: dlthub-client>=0.28.1
@@ -62,5 +62,5 @@ $ dlt dashboard --edit
 ## Xulosa: qaror qoidasi
 
 - **dlt (asosiy paket, `pip install dlt`) ichida bo'lgan HAR NARSA** — ishlatiladi, qayta yozilmaydi.
-- **`dlt[hub]` yoki `dlthub` talab qiladigan HAR NARSA** — ishlatilmaydi. O'rniga ochiq kodli muqobil (masalan `marimo` dashboard uchun) yoki o'zimiznikini yozamiz.
+- **`dlt[hub]` yoki `dlthub` talab qiladigan HAR NARSA** — ishlatilmaydi. Dashboard uchun `src/chumoli/static/index.html` (o'zimizniki); boshqa imkoniyatlar uchun ochiq kodli muqobil yoki o'zimiznikini yozamiz.
 - Yangi dlt versiyasi chiqqanda (yoki yangi imkoniyat haqida eshitilganda), **bu jadval yangilanadi, taxmin qilinmaydi.**

@@ -5,14 +5,13 @@ Python 3.11+, pip
 
 ## O'rnatish
 ```bash
-cd chumoli-mvp
+cd chumoli   # yoki repo ildizi
 pip install -e ".[dev]"
 ```
 
-## Testlar (fundament)
+## Testlar
 ```bash
-python -m pytest tests/ -v
-# 42 passed (tasdiqlangan)
+PYTHONPATH=src python -m pytest tests/ -q
 ```
 
 ## API + Dashboard
@@ -23,21 +22,29 @@ PYTHONPATH=src python -m chumoli.api.app
 
 Ochish: http://127.0.0.1:8000/
 
-- Dashboard: `/`
+- Dashboard: `/` (`src/chumoli/static/index.html`)
 - API docs: `/api/docs`
 - Health: `/api/health`
 
 ## MVP da nima ishlaydi
-1. Connector katalogi (REST API, SQL Database) — manifest orqali
+1. Connector katalogi (REST, SQL, UZ connectorlar) — manifest orqali
 2. Pipeline yaratish (secrets shifrlangan, ControlStore)
-3. Run → haqiqiy dlt load (DuckDB)
-4. Quality report qaytariladi
+3. Run → dlt load (DuckDB / PostgreSQL / lokal fayl / S3 / ClickHouse)
+4. Quality report (SQL destinationlar)
 5. HTML dashboard API ga ulangan
+6. Lokal eksport: `~/chumoli-data/exports/<pipeline>/` — Preview da yo'l + fayllar
 
-## Sinov (tasdiqlangan)
-`POST /api/pipelines` + `POST .../run` bilan jsonplaceholder `/posts` → **100 qator** DuckDB ga yuklandi.
+## Destinationlar
+| Key | Izoh |
+|-----|------|
+| `duckdb` | default local DB |
+| `postgresql` | warehouse |
+| `filesystem` | faqat lokal papka |
+| `s3` | `s3://` / `gs://` / … |
+| `clickhouse` | `pip install "dlt[clickhouse]"` |
 
-## Keyingi qadamlar
-- UI nomlari: PostgreSQL / MySQL (sql_database o'rniga)
-- UZ connectorlar (Click, Payme)
-- Monitor → GitHub issue
+## Docker
+```bash
+docker compose up --build
+```
+`CHUMOLI_HOME=/data`, `CHUMOLI_DATA=/data/chumoli-data`

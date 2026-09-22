@@ -82,22 +82,26 @@ Namuna (UI dagi demo tugmalar):
 | **Ishga tushirishlar** | Run tarixi, status, qatorlar, vaqt |
 | **Sozlamalar** | Telegram xabar, scheduler |
 
-Ma’lumot va maxfiy kalitlar shu yerda saqlanadi (loyiha papkasida emas):
+Ma’lumot ikki joyda saqlanadi (loyiha papkasida emas):
 
 ```text
-~/.chumoli/
-  chumoli_control.db    # pipeline sozlamalari
-  master.key            # shifrlash
-  api.key               # API kalit
-  data/                 # default DuckDB fayllar
-  pipelines/            # dlt holati
-  examples/             # demo ma’lumotlar
+~/.chumoli/                 # yashirin (tizim)
+  chumoli_control.db
+  master.key
+  api.key
+  pipelines/                # dlt state / schema
+
+~/chumoli-data/             # foydalanuvchi ko‘radigan
+  <pipeline>.duckdb
+  examples/
+  exports/<pipeline>/       # lokal CSV/Parquet
 ```
 
 Boshqa joyga yozish:
 
 ```bash
-export CHUMOLI_HOME=/path/to/my-data
+export CHUMOLI_HOME=/path/to/system
+export CHUMOLI_DATA=/path/to/visible-data
 chumoli ui
 ```
 
@@ -128,9 +132,10 @@ chumoli run <nom>          # bir marta ishga tushirish
 | To‘lov | Click, Payme, Uzum Market |
 | Sinov | Volume demo (sintetik) |
 
-**Destination:** DuckDB (default), PostgreSQL, Filesystem/S3, ClickHouse.
+**Destination:** DuckDB (default), PostgreSQL, Lokal fayl, S3/Object storage, ClickHouse.
 
-Bo‘sh DuckDB yo‘li → avtomatik `~/.chumoli/data/<pipeline>.duckdb` (CWD ga yozilmaydi).
+- Bo‘sh DuckDB → `~/chumoli-data/<pipeline>.duckdb`
+- Lokal fayl → `~/chumoli-data/exports/<pipeline>/` (S3 dan alohida katalog)
 
 ---
 
@@ -138,7 +143,8 @@ Bo‘sh DuckDB yo‘li → avtomatik `~/.chumoli/data/<pipeline>.duckdb` (CWD ga
 
 | O‘zgaruvchi | Ma’nosi |
 |-------------|---------|
-| `CHUMOLI_HOME` | Runtime papka (default `~/.chumoli`) |
+| `CHUMOLI_HOME` | Tizim papka (default `~/.chumoli`) |
+| `CHUMOLI_DATA` | Ko‘rinadigan ma’lumot (default `~/chumoli-data`) |
 | `CHUMOLI_API_KEY` | API kalit (bo‘sh bo‘lsa `api.key` yaratiladi) |
 
 Telegram: dashboard **Sozlamalar** da bot token + chat id. Muvaffaqiyat/xato xabarlarini pipeline sozlamasida yoqing.

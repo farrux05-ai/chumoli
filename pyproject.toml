@@ -54,7 +54,6 @@ packages = ["src/chumoli"]
 "src/chumoli" = "chumoli"
 
 # Dashboard lives in src/chumoli/static (packaged with the wheel).
-# Do NOT force-include repo-root static/ — missing dir breaks editable install.
 
 [tool.hatch.build.targets.sdist]
 include = [
