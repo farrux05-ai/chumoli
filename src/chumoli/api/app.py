@@ -77,24 +77,42 @@ app.add_middleware(
 
 
 def _static_dir() -> Path:
-    # Installed wheel: chumoli/static (next to api/)
-    # Dev / Docker: repo-root static/ or /app/static
-    pkg_root = Path(__file__).resolve().parent.parent
-    candidates = [
-        Path("/app/static"),
-        pkg_root / "static",
-        Path(__file__).resolve().parents[3] / "static",
-        Path(__file__).resolve().parents[2] / "static",
-        Path.cwd() / "static",
-    ]
+    """Locate dashboard static/ (index.html).
+
+    Order:
+      1. Walk up from this file (editable checkout: repo-root/static)
+      2. Package dir chumoli/static (wheel force-include)
+      3. CWD/static
+      4. Docker /app/static
+    """
+    here = Path(__file__).resolve().parent
+    candidates: list[Path] = []
+    for parent in [here, *here.parents]:
+        candidates.append(parent / "static")
+    pkg_root = here.parent  # .../chumoli
+    candidates.append(pkg_root / "static")
+    candidates.append(Path.cwd() / "static")
+    candidates.append(Path("/app/static"))
+
+    seen: set[str] = set()
     for p in candidates:
+        key = str(p)
+        if key in seen:
+            continue
+        seen.add(key)
         if p.is_dir() and (p / "index.html").is_file():
             return p
-    return candidates[0]
+    # Last resort — index() will 404 with a clear message
+    return pkg_root / "static"
+
+
+def _resolve_static() -> Path:
+    """Re-resolve at request time (CWD / install layout may differ from import)."""
+    return _static_dir()
 
 
 _STATIC = _static_dir()
-if _STATIC.is_dir():
+if _STATIC.is_dir() and (_STATIC / "index.html").is_file():
     app.mount("/assets", StaticFiles(directory=str(_STATIC)), name="assets")
 
 _API_KEY: str | None = None
@@ -365,9 +383,15 @@ def preview_pipeline_data(name: str, limit: int = 10) -> dict[str, Any]:
 
 @app.get("/")
 def index() -> HTMLResponse:
-    index_path = _STATIC / "index.html"
+    static_dir = _resolve_static()
+    index_path = static_dir / "index.html"
     if not index_path.is_file():
-        raise HTTPException(404, "Dashboard topilmadi (static/index.html)")
+        raise HTTPException(
+            404,
+            "Dashboard topilmadi (static/index.html). "
+            "Repo ildizidan ishga tushiring yoki: pip install -e . "
+            f"(qidirilgan: {static_dir})",
+        )
     html = index_path.read_text(encoding="utf-8")
     key = _get_api_key()
     meta = f'<meta name="chumoli-api-key" content="{key}"/>'
