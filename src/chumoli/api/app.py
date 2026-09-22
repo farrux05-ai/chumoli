@@ -79,31 +79,30 @@ app.add_middleware(
 def _static_dir() -> Path:
     """Locate dashboard static/ (index.html).
 
-    Order:
-      1. Walk up from this file (editable checkout: repo-root/static)
-      2. Package dir chumoli/static (wheel force-include)
-      3. CWD/static
-      4. Docker /app/static
+    Prefer package-local ``chumoli/static`` (editable + wheel), then walk
+    up to repo-root/static, then CWD and Docker paths.
     """
     here = Path(__file__).resolve().parent
-    candidates: list[Path] = []
-    for parent in [here, *here.parents]:
+    pkg_root = here.parent  # .../chumoli (src/chumoli or site-packages/chumoli)
+
+    candidates: list[Path] = [
+        pkg_root / "static",  # src/chumoli/static or installed package
+        Path("/app/static"),
+        Path.cwd() / "static",
+    ]
+    # Walk up: repo-root/static when developing from checkout
+    for parent in here.parents:
         candidates.append(parent / "static")
-    pkg_root = here.parent  # .../chumoli
-    candidates.append(pkg_root / "static")
-    candidates.append(Path.cwd() / "static")
-    candidates.append(Path("/app/static"))
 
     seen: set[str] = set()
     for p in candidates:
-        key = str(p)
+        key = str(p.resolve()) if p.exists() else str(p)
         if key in seen:
             continue
         seen.add(key)
         if p.is_dir() and (p / "index.html").is_file():
-            return p
-    # Last resort — index() will 404 with a clear message
-    return pkg_root / "static"
+            return p.resolve()
+    return (pkg_root / "static").resolve()
 
 
 def _resolve_static() -> Path:
@@ -139,6 +138,12 @@ async def require_api_key(request: Request) -> None:
 @app.on_event("startup")
 def _startup() -> None:
     configure_logging()
+    static_dir = _resolve_static()
+    log.info(
+        "static_dir_resolved",
+        path=str(static_dir),
+        index_exists=(static_dir / "index.html").is_file(),
+    )
     _get_api_key()
     try:
         start_scheduler()
