@@ -38,7 +38,8 @@ MANIFEST = ConnectorManifest(
     key="uzum_market",
     label="Uzum Market",
     category=ConnectorCategory.UZ_PAYMENT,
-    description="Uzum Seller API — buyurtmalar",
+    maturity="beta",
+    description="Uzum Seller API — buyurtmalar (beta)",
     dlt_source_factory="chumoli.connectors.uzum_market.connector.UzumMarketConnector",
     fields=[
         FieldSpec(

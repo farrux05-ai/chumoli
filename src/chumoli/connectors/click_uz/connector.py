@@ -40,7 +40,8 @@ MANIFEST = ConnectorManifest(
     key="click_uz",
     label="Click",
     category=ConnectorCategory.UZ_PAYMENT,
-    description="Click Merchant API — to'lovlar",
+    maturity="beta",
+    description="Click Merchant API — to'lovlar (beta: real kalit bilan sinang)",
     dlt_source_factory="chumoli.connectors.click_uz.connector.ClickConnector",
     fields=[
         FieldSpec(

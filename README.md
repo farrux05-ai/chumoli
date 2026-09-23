@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/chumoli-logo.svg" alt="Chumoli" width="120" height="120" />
+  <img src="https://raw.githubusercontent.com/farrux05-ai/chumoli/main/assets/chumoli-logo.svg" alt="Chumoli" width="120" height="120" />
 </p>
 
 <h1 align="center">Chumoli</h1>
@@ -11,24 +11,22 @@
 
 <p align="center">
   <a href="https://github.com/farrux05-ai/chumoli/actions/workflows/ci.yml"><img src="https://github.com/farrux05-ai/chumoli/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://pypi.org/project/chumoli/"><img src="https://img.shields.io/pypi/v/chumoli.svg" alt="PyPI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python" />
+  <img src="https://img.shields.io/badge/status-beta-yellow.svg" alt="Beta" />
 </p>
 
 ---
 
-SQL, REST, Click, Payme, Uzum va boshqa manbalardan ma’lumotni olib **DuckDB**, **PostgreSQL**, **lokal fayl** yoki **S3** ga yuklang. Brauzerda boshqaring yoki CLI orqali ishga tushiring.
+SQL, REST va O‘zbekiston manbalaridan (Click, Payme, Uzum, Didox — **beta**) ma’lumotni olib **DuckDB**, **PostgreSQL**, **lokal fayl** yoki **S3** ga yuklang. Brauzerda boshqaring yoki CLI orqali ishga tushiring.
 
 ## Tez boshlash
 
 **Talab:** Python 3.11+
 
 ```bash
-git clone https://github.com/farrux05-ai/chumoli.git
-cd chumoli
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -U pip
-pip install -e ".[dev]"
+pip install chumoli
 chumoli ui
 ```
 
@@ -36,12 +34,16 @@ chumoli ui
 - API docs: http://127.0.0.1:8000/api/docs
 - To‘xtatish: `Ctrl+C`
 
-Brauzersiz:
+Brauzersiz: `chumoli ui --no-open` yoki `chumoli-api`.
+
+### Ishlab chiqish (repo)
 
 ```bash
-chumoli ui --no-open
-# yoki
-chumoli-api
+git clone https://github.com/farrux05-ai/chumoli.git
+cd chumoli
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+chumoli ui
 ```
 
 ### Birinchi pipeline
@@ -52,16 +54,20 @@ chumoli-api
 
 UI dagi demo: SQL → DuckDB, REST (JSONPlaceholder) → DuckDB, Volume (sintetik).
 
-## Nima bor (v1)
+## Nima bor (v0.1)
 
 | Imkoniyat | Izoh |
 |-----------|------|
-| Ulagichlar | SQL, REST, Click, Payme, Uzum, sintetik volume |
+| Ulagichlar | SQL, REST, sintetik volume (**stable**); Click, Payme, Uzum, Didox (**beta**) |
 | Destinationlar | DuckDB, PostgreSQL, lokal CSV/Parquet, S3/GCS/…, ClickHouse |
 | Dashboard | Yaratish, Run, Preview, runs tarixi, scheduler |
 | Xavfsizlik | Secrets Fernet bilan shifrlangan; API kalit |
 | Bildirishnoma | Telegram (ixtiyoriy) |
 | CLI | `chumoli ui`, `list`, `run` |
+
+### UZ connectorlar — beta
+
+Click, Payme, Uzum Market va Didox kod bazasida bor va UI da **beta** deb belgilangan. Ular hali barcha merchant/sandbox muhitlarida to‘liq tasdiqlanmagan. Ishlatishdan oldin o‘z API kalitingiz bilan sinang; xato topsangiz [Issues](https://github.com/farrux05-ai/chumoli/issues) oching.
 
 ## Destinationlar
 
@@ -69,11 +75,11 @@ UI dagi demo: SQL → DuckDB, REST (JSONPlaceholder) → DuckDB, Volume (sinteti
 |-----|----------------------|
 | `duckdb` | `~/chumoli-data/<pipeline>.duckdb` |
 | `postgresql` | SQLAlchemy URL (parol maxfiy) |
-| `filesystem` | Faqat lokal → `~/chumoli-data/exports/<pipeline>/` |
+| `filesystem` | Faqat lokal → tanlangan papka yoki `~/chumoli-data/exports/<pipeline>/` |
 | `s3` | `s3://` / `gs://` / `az://` … |
-| `clickhouse` | URL; `pip install "dlt[clickhouse]"` |
+| `clickhouse` | URL; `pip install "chumoli[clickhouse]"` |
 
-Lokal fayl va S3 katalogda **alohida**. Preview lokal eksport uchun papka yo‘li, fayllar ro‘yxati va CSV namunasi beradi (`_dlt*` metadata yashirin).
+Lokal fayl va S3 katalogda **alohida**. dlt `_dlt_*` metadata yashirin staging da qoladi; foydalanuvchi papkasiga faqat toza jadvallar chiqadi. Preview: papka yo‘li, fayllar, CSV namunasi.
 
 ## Ma’lumot qayerda
 
@@ -83,11 +89,12 @@ Lokal fayl va S3 katalogda **alohida**. Preview lokal eksport uchun papka yo‘l
   master.key
   api.key
   pipelines/                # dlt state
+  fs_staging/               # dlt filesystem + _dlt_* (yashirin)
 
 ~/chumoli-data/             # foydalanuvchi ko‘radigan
   <pipeline>.duckdb
   examples/
-  exports/<pipeline>/
+  exports/<pipeline>/       # toza CSV/Parquet
 ```
 
 ```bash

@@ -1,3 +1,9 @@
+## Latest (0.1.0 packaging)
+
+- UZ connectors marked **beta** (`maturity` on manifest + UI badge).
+- README: `pip install chumoli` primary path; PyPI classifiers.
+- Filesystem: `_dlt_*` stays in `~/.chumoli/fs_staging/`; publish clean data only.
+
 # Status
 
 **Verified:** 2026-09-22

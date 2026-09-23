@@ -129,6 +129,17 @@ class ConnectorCategory(str, Enum):
     UNIVERSAL = "universal"
 
 
+class ConnectorMaturity(str, Enum):
+    """Ulagich ishonchliligi — UI badge uchun.
+
+    STABLE — umumiy manbalar (SQL, REST, demo).
+    BETA — O'zbekiston API'lari: kod bor, real/sandbox sinovi ochiq.
+    """
+
+    STABLE = "stable"
+    BETA = "beta"
+
+
 class ConnectorManifest(BaseModel):
     """Bitta connectorning to'liq "pasporti".
 
@@ -143,6 +154,10 @@ class ConnectorManifest(BaseModel):
     label: str = Field(..., description="Dashboard'da ko'rinadigan nom, masalan 'Payme'")
     category: ConnectorCategory
     description: str = Field(default="", description="Bir qatorlik tavsif, o'zbekcha")
+    maturity: ConnectorMaturity = Field(
+        default=ConnectorMaturity.STABLE,
+        description="stable | beta — UI badge va hujjatlar uchun",
+    )
     fields: list[FieldSpec] = Field(default_factory=list)
     dlt_source_factory: str = Field(
         ...,

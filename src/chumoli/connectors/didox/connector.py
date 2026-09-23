@@ -60,7 +60,8 @@ MANIFEST = ConnectorManifest(
     key="didox",
     label="Didox",
     category=ConnectorCategory.UZ_GOV,
-    description="Didox EHD tizimi — faktura, shartnoma, dalolatnoma",
+    maturity="beta",
+    description="Didox EHD — faktura/shartnoma (beta: real login bilan sinang)",
     dlt_source_factory="chumoli.connectors.didox.connector.DidoxConnector",
     fields=[
         FieldSpec(

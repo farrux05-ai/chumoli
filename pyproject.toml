@@ -7,6 +7,17 @@ license = "Apache-2.0"
 requires-python = ">=3.11"
 keywords = ["etl", "elt", "dlt", "uzbekistan", "data-pipeline", "duckdb"]
 authors = [{ name = "farrux05-ai" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries",
+    "Operating System :: OS Independent",
+]
 dependencies = [
     "dlt[duckdb]>=1.30",
     "dlt[sql_database]>=1.30",
@@ -30,6 +41,7 @@ dependencies = [
 Homepage = "https://github.com/farrux05-ai/chumoli"
 Repository = "https://github.com/farrux05-ai/chumoli"
 Issues = "https://github.com/farrux05-ai/chumoli/issues"
+Documentation = "https://github.com/farrux05-ai/chumoli#readme"
 
 [project.scripts]
 chumoli = "chumoli.cli:main"
@@ -41,6 +53,9 @@ dev = [
 ]
 postgres = [
     "dlt[postgres]>=1.30",
+]
+clickhouse = [
+    "dlt[clickhouse]>=1.30",
 ]
 
 [build-system]
@@ -54,6 +69,8 @@ packages = ["src/chumoli"]
 "src/chumoli" = "chumoli"
 
 # Dashboard lives in src/chumoli/static (packaged with the wheel).
+[tool.hatch.build.targets.wheel.force-include]
+"src/chumoli/static" = "chumoli/static"
 
 [tool.hatch.build.targets.sdist]
 include = [

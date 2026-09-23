@@ -42,7 +42,8 @@ MANIFEST = ConnectorManifest(
     key="payme_uz",
     label="Payme",
     category=ConnectorCategory.UZ_PAYMENT,
-    description="Payme merchant — cheklar (receipts.get_all)",
+    maturity="beta",
+    description="Payme merchant — cheklar (beta: real/sandbox kalit bilan sinang)",
     dlt_source_factory="chumoli.connectors.payme_uz.connector.PaymeConnector",
     fields=[
         FieldSpec(

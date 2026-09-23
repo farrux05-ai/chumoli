@@ -537,12 +537,16 @@ def inspect_sql_database(body: SqlInspectBody) -> dict[str, Any]:
 def list_connectors() -> list[dict[str, Any]]:
     out = []
     for m in registry.all_manifests():
+        maturity = getattr(m, "maturity", None)
+        if hasattr(maturity, "value"):
+            maturity = maturity.value
         out.append(
             {
                 "key": m.key,
                 "label": m.label,
                 "category": m.category.value if hasattr(m.category, "value") else str(m.category),
                 "description": m.description,
+                "maturity": maturity or "stable",
                 "fields": [f.model_dump(mode="json") for f in m.fields],
             }
         )
