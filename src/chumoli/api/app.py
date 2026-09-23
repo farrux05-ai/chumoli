@@ -858,9 +858,12 @@ def demo_sql() -> dict[str, Any]:
 
 @app.post("/api/demo/rest", dependencies=[Depends(require_api_key)])
 def demo_rest() -> dict[str, Any]:
-    """Ommaviy JSONPlaceholder API → DuckDB (~1 daqiqada)."""
+    """O'zbekiston Markaziy bank valyuta kurslari (ochiq JSON) → DuckDB.
+
+    https://cbu.uz — kalit yo'q, bitta JSON massiv (~70 valyuta), pagination yo'q.
+    """
     register_builtin_connectors()
-    name = "demo_rest_posts"
+    name = "demo_rest_cbu"
     manifest = registry.get_manifest("rest_api")
     from chumoli.core.paths import examples_dir, ensure_runtime_dirs
     ensure_runtime_dirs()
@@ -869,9 +872,10 @@ def demo_rest() -> dict[str, Any]:
         name=name,
         connector_key="rest_api",
         source_params={
-            "base_url": "https://jsonplaceholder.typicode.com",
-            "endpoint": "/posts",
+            "base_url": "https://cbu.uz",
+            "endpoint": "/uz/arkhiv-kursov-valyut/json/",
             "auth_type": "none",
+            "max_pages": "1",  # CBU bitta javobda beradi — paginator kerak emas
         },
         destination=DestinationConfig(
             connector="duckdb", connection=duck_path, dataset_name="demo"
@@ -885,8 +889,8 @@ def demo_rest() -> dict[str, Any]:
         from chumoli.core.demo_data import friendly_db_error
 
         raise HTTPException(500, friendly_db_error(e)) from e
-    out = _record_and_demo_response(result, duck_path, label="REST API → DuckDB")
-    out["source"] = "https://jsonplaceholder.typicode.com/posts"
+    out = _record_and_demo_response(result, duck_path, label="CBU valyuta → DuckDB")
+    out["source"] = "https://cbu.uz/uz/arkhiv-kursov-valyut/json/"
     out["tables"] = result.row_counts
     return out
 

@@ -52,7 +52,7 @@ chumoli ui
 2. Manba tanlang → ulanishni tekshiring → saqlang
 3. **Run** → **Preview**
 
-UI dagi demo: SQL → DuckDB, REST (JSONPlaceholder) → DuckDB, Volume (sintetik).
+UI dagi demo: SQL → DuckDB, REST (CBU valyuta kurslari) → DuckDB, Volume (sintetik).
 
 ## Nima bor (v0.1)
 
