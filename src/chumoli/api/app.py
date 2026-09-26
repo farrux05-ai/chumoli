@@ -6,6 +6,7 @@ import os
 import re
 import time
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,7 @@ from chumoli.core.destinations import (
     get_destination,
     is_destination_available,
 )
+from chumoli.core.errors import friendly_error
 from chumoli.core.pipeline_runner import (
     PipelineAlreadyRunning,
     drop_pending_packages,
@@ -41,6 +43,8 @@ from chumoli.core.pipeline_runner import (
     get_failed_jobs,
     get_preview_rows,
     get_running_pipelines,
+    record_run_failure,
+    record_run_result,
     run_pipeline_by_name,
     sync_from_destination,
 )
@@ -187,6 +191,7 @@ class RunResponse(BaseModel):
     cursor_last_value: Any = None
     is_first_run: bool = True
     peak_memory_mb: float = 0.0
+    error: str | None = None
 
 
 # Background run jobs (in-memory; single uvicorn process). See review notes.
@@ -214,32 +219,14 @@ def _execute_run_job(job_id: str, name: str) -> None:
         if job is None:
             return
         job["status"] = "running"
+    started = datetime.now(UTC)
     try:
         register_builtin_connectors()
         result = run_pipeline_by_name(name, store=_store())
+        record_run_result(_runs(), result, trigger="manual-async", started_at=started)
         details = [
             {"passed": o.passed, "detail": o.detail} for o in result.quality_report.outcomes
         ]
-        try:
-            _runs().record(
-                pipeline_name=result.pipeline_name,
-                success=result.success,
-                quality_passed=result.quality_report.all_passed,
-                row_counts=result.row_counts,
-                quality_details=details,
-                trigger="manual-async",
-                duration_seconds=result.duration_seconds,
-                total_rows=result.total_rows,
-                rows_per_second=result.rows_per_second,
-                new_rows=result.new_rows,
-                col_counts=result.col_counts,
-                schema_changes=result.schema_changes,
-                cursor_last_value=result.cursor_last_value,
-                is_first_run=result.is_first_run,
-                peak_memory_mb=result.peak_memory_mb,
-            )
-        except Exception:
-            log.exception("run_record_failed", pipeline=name, job=job_id)
         job["status"] = "done"
         job["result"] = RunResponse(
             pipeline_name=result.pipeline_name,
@@ -256,6 +243,7 @@ def _execute_run_job(job_id: str, name: str) -> None:
             cursor_last_value=result.cursor_last_value,
             is_first_run=result.is_first_run,
             peak_memory_mb=result.peak_memory_mb,
+            error=result.error,
         ).model_dump(mode="json")
     except PipelineAlreadyRunning as e:
         log.warning("pipeline_already_running", pipeline=name, job=job_id)
@@ -263,13 +251,10 @@ def _execute_run_job(job_id: str, name: str) -> None:
         job["error"] = str(e)
     except Exception as e:
         log.exception("run_job_failed", pipeline=name, job=job_id)
+        # Persist so the failure is visible in run history, not only a toast.
+        record_run_failure(_runs(), name, e, trigger="manual-async", started_at=started)
         job["status"] = "error"
-        try:
-            from chumoli.core.demo_data import friendly_db_error
-
-            job["error"] = friendly_db_error(e)
-        except Exception:
-            job["error"] = str(e)
+        job["error"] = friendly_error(e)
     finally:
         job["finished_at"] = time.time()
 
@@ -708,6 +693,7 @@ def delete_pipeline(name: str) -> dict[str, str]:
 @app.post("/api/pipelines/{name}/run", dependencies=[Depends(require_api_key)])
 def run_pipeline(name: str) -> RunResponse:
     register_builtin_connectors()
+    started = datetime.now(UTC)
     try:
         result = run_pipeline_by_name(name, store=_store())
     except KeyError as e:
@@ -715,29 +701,12 @@ def run_pipeline(name: str) -> RunResponse:
     except PipelineAlreadyRunning as e:
         raise HTTPException(409, str(e)) from e
     except Exception as e:
-        raise HTTPException(500, f"Run xatosi: {e}") from e
+        # Persist the failure so it shows in run history, then surface it.
+        record_run_failure(_runs(), name, e, trigger="manual", started_at=started)
+        raise HTTPException(500, f"Run xatosi: {friendly_error(e)}") from e
 
+    record_run_result(_runs(), result, trigger="manual", started_at=started)
     details = [{"passed": o.passed, "detail": o.detail} for o in result.quality_report.outcomes]
-    try:
-        _runs().record(
-            pipeline_name=result.pipeline_name,
-            success=result.success,
-            quality_passed=result.quality_report.all_passed,
-            row_counts=result.row_counts,
-            quality_details=details,
-            trigger="manual",
-            duration_seconds=result.duration_seconds,
-            total_rows=result.total_rows,
-            rows_per_second=result.rows_per_second,
-            new_rows=result.new_rows,
-            col_counts=result.col_counts,
-            schema_changes=result.schema_changes,
-            cursor_last_value=result.cursor_last_value,
-            is_first_run=result.is_first_run,
-            peak_memory_mb=result.peak_memory_mb,
-        )
-    except Exception:
-        log.exception("run_record_failed", pipeline=result.pipeline_name)
     return RunResponse(
         pipeline_name=result.pipeline_name,
         success=result.success,
@@ -753,31 +722,12 @@ def run_pipeline(name: str) -> RunResponse:
         cursor_last_value=result.cursor_last_value,
         is_first_run=result.is_first_run,
         peak_memory_mb=result.peak_memory_mb,
+        error=result.error,
     )
 
 
 def _record_and_demo_response(result: Any, duck_path: str, *, label: str) -> dict[str, Any]:
-    details = [{"passed": o.passed, "detail": o.detail} for o in result.quality_report.outcomes]
-    try:
-        _runs().record(
-            pipeline_name=result.pipeline_name,
-            success=result.success,
-            quality_passed=result.quality_report.all_passed,
-            row_counts=result.row_counts,
-            quality_details=details,
-            trigger="demo",
-            duration_seconds=result.duration_seconds,
-            total_rows=result.total_rows,
-            rows_per_second=result.rows_per_second,
-            new_rows=result.new_rows,
-            col_counts=result.col_counts,
-            schema_changes=result.schema_changes,
-            cursor_last_value=result.cursor_last_value,
-            is_first_run=result.is_first_run,
-            peak_memory_mb=result.peak_memory_mb,
-        )
-    except Exception:
-        log.exception("run_record_failed", pipeline=result.pipeline_name, trigger="demo")
+    record_run_result(_runs(), result, trigger="demo")
     return {
         "pipeline_name": result.pipeline_name,
         "success": result.success,
@@ -815,7 +765,12 @@ def demo_volume(row_count: int = 100000) -> dict[str, Any]:
         write_disposition=WriteDisposition.REPLACE,
     )
     _store().save(config, {}, manifest)
-    result = run_pipeline_by_name(name, store=_store())
+    started = datetime.now(UTC)
+    try:
+        result = run_pipeline_by_name(name, store=_store())
+    except Exception as e:
+        record_run_failure(_runs(), name, e, trigger="demo", started_at=started)
+        raise HTTPException(500, friendly_error(e)) from e
     return _record_and_demo_response(result, duck_path, label="Volume Parquet → DuckDB")
 
 
@@ -845,12 +800,12 @@ def demo_sql() -> dict[str, Any]:
         write_disposition=WriteDisposition.REPLACE,
     )
     _store().save(config, {"connection_string": sample_sqlite_url()}, manifest)
+    started = datetime.now(UTC)
     try:
         result = run_pipeline_by_name(name, store=_store())
     except Exception as e:
-        from chumoli.core.demo_data import friendly_db_error
-
-        raise HTTPException(500, friendly_db_error(e)) from e
+        record_run_failure(_runs(), name, e, trigger="demo", started_at=started)
+        raise HTTPException(500, friendly_error(e)) from e
     out = _record_and_demo_response(result, duck_path, label="SQL → DuckDB (namuna)")
     out["source"] = sample_sqlite_url()
     out["tables"] = result.row_counts
@@ -884,12 +839,12 @@ def demo_rest() -> dict[str, Any]:
         write_disposition=WriteDisposition.REPLACE,
     )
     _store().save(config, {"secret_value": ""}, manifest)
+    started = datetime.now(UTC)
     try:
         result = run_pipeline_by_name(name, store=_store())
     except Exception as e:
-        from chumoli.core.demo_data import friendly_db_error
-
-        raise HTTPException(500, friendly_db_error(e)) from e
+        record_run_failure(_runs(), name, e, trigger="demo", started_at=started)
+        raise HTTPException(500, friendly_error(e)) from e
     out = _record_and_demo_response(result, duck_path, label="CBU valyuta → DuckDB")
     out["source"] = "https://cbu.uz/uz/arkhiv-kursov-valyut/json/"
     out["tables"] = result.row_counts

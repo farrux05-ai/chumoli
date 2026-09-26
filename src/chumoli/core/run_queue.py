@@ -177,7 +177,12 @@ def reset_run_queue_for_tests(max_concurrent: int = 2) -> RunQueue:
 
 def _default_executor(pipeline_name: str, trigger: str) -> None:
     from chumoli.connectors import register_builtin_connectors
-    from chumoli.core.pipeline_runner import PipelineAlreadyRunning, run_pipeline_by_name
+    from chumoli.core.pipeline_runner import (
+        PipelineAlreadyRunning,
+        record_run_failure,
+        record_run_result,
+        run_pipeline_by_name,
+    )
     from chumoli.store.control_store import ControlStore
     from chumoli.store.run_store import RunStore
 
@@ -187,29 +192,7 @@ def _default_executor(pipeline_name: str, trigger: str) -> None:
     started = datetime.now(UTC)
     try:
         result = run_pipeline_by_name(pipeline_name, store=store)
-        details = [
-            {"passed": o.passed, "detail": o.detail}
-            for o in result.quality_report.outcomes
-        ]
-        runs.record(
-            pipeline_name=pipeline_name,
-            success=result.success,
-            quality_passed=result.quality_report.all_passed,
-            row_counts=result.row_counts,
-            quality_details=details,
-            started_at=started,
-            finished_at=datetime.now(UTC),
-            trigger=trigger,
-            duration_seconds=result.duration_seconds,
-            total_rows=result.total_rows,
-            rows_per_second=result.rows_per_second,
-            new_rows=result.new_rows,
-            col_counts=result.col_counts,
-            schema_changes=result.schema_changes,
-            cursor_last_value=result.cursor_last_value,
-            is_first_run=result.is_first_run,
-            peak_memory_mb=result.peak_memory_mb,
-        )
+        record_run_result(runs, result, trigger=trigger, started_at=started)
         log.info(
             "queue_run_ok",
             pipeline=pipeline_name,
@@ -226,12 +209,4 @@ def _default_executor(pipeline_name: str, trigger: str) -> None:
         return
     except Exception as e:
         log.exception("queue_run_failed", pipeline=pipeline_name)
-        runs.record(
-            pipeline_name=pipeline_name,
-            success=False,
-            quality_passed=False,
-            error=str(e),
-            started_at=started,
-            finished_at=datetime.now(UTC),
-            trigger=trigger,
-        )
+        record_run_failure(runs, pipeline_name, e, trigger=trigger, started_at=started)

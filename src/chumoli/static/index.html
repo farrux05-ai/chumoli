@@ -918,6 +918,7 @@ async function renderRuns(){
     <div class="table-wrap"><table>
       <thead><tr><th>Pipeline</th><th>Holat</th><th>Yangi/Jami</th><th>Tezlik</th><th>Davomiylik</th><th>Cursor</th></tr></thead>
       <tbody>${runs.map(r=>{
+        const errDetail=(!r.success&&r.error)?`<div style="font-size:11px;color:var(--red);margin-top:2px">✗ ${esc(String(r.error).slice(0,120))}</div>`:'';
         const qDetail=(r.success&&r.quality_passed===false)?qualityFailDetails(r):'';
         const cursor=r.cursor_last_value!=null&&r.cursor_last_value!==''
           ? `cursor: ${esc(String(r.cursor_last_value).slice(0,20))}`
@@ -927,7 +928,7 @@ async function renderRuns(){
             <strong>${esc(r.pipeline_name)}</strong>
             <div style="font-size:11px;color:var(--faint);margin-top:2px">${esc(r.trigger||'—')}</div>
           </td>
-          <td>${lastRunBadge(r)}${qDetail}</td>
+          <td>${lastRunBadge(r)}${errDetail}${qDetail}</td>
           <td class="mono">${rowsNewTotal(r)}</td>
           <td class="mono" style="color:var(--accent-text)">${r.rows_per_second>0?Math.round(r.rows_per_second).toLocaleString()+' q/s':'—'}</td>
           <td class="mono" style="color:var(--dim)">
