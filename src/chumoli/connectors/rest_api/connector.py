@@ -35,7 +35,6 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import parse_qsl, urlparse
 
-from chumoli.connectors.base import BaseUZConnector
 from chumoli.core.manifest import (
     ConnectorCategory,
     ConnectorManifest,

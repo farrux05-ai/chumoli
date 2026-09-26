@@ -52,7 +52,6 @@ def test_destination_connection_encrypted_not_in_config_json(tmp_path) -> None:
     )
 
     # Diskdagi config_json da parol bo'lmasligi kerak
-    import json
     import sqlite3
 
     con = sqlite3.connect(tmp_path / "control.db")

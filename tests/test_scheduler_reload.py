@@ -8,7 +8,7 @@ from chumoli.core.config import (
     ScheduleConfig,
     ScheduleKind,
 )
-from chumoli.core.manifest import ConnectorCategory, ConnectorManifest, FieldSpec, FieldType
+from chumoli.core.manifest import ConnectorCategory, ConnectorManifest, FieldSpec
 from chumoli.core.scheduler import reload_jobs, start_scheduler, status, stop_scheduler
 from chumoli.store.control_store import ControlStore
 

@@ -6,10 +6,8 @@ import os
 from pathlib import Path
 
 import pytest
-from cryptography.fernet import Fernet
 
 from chumoli.core.config import DestinationConfig, PipelineConfig
-from chumoli.core.notify import send_telegram
 from chumoli.core.pipeline_runner import get_preview_rows
 from chumoli.security.crypto import CredentialCipher
 from chumoli.store.control_store import ControlStore
@@ -75,12 +73,8 @@ def test_telegram_timeout_is_five_seconds() -> None:
 
 def test_filesystem_csv_env_toggle(monkeypatch, tmp_path: Path) -> None:
     """CSV sets DISABLE_COMPRESSION; non-csv clears it so next run does not leak."""
-    from chumoli.core.config import DestinationConfig, PipelineConfig, WriteDisposition
-    from chumoli.core.pipeline_runner import _execute
-    from chumoli.store.control_store import StoredPipeline
 
     # We only assert the env branch by replaying the same logic as _execute
-    import os
 
     def apply_fmt(fmt: str) -> None:
         if fmt == "csv":

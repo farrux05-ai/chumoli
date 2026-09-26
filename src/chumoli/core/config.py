@@ -48,7 +48,7 @@ class ScheduleConfig(BaseModel):
         return f"{h:02d}:{m:02d}"
 
     @model_validator(mode="after")
-    def _schedule_fields_required(self) -> "ScheduleConfig":
+    def _schedule_fields_required(self) -> ScheduleConfig:
         if self.kind == ScheduleKind.INTERVAL and not self.interval_minutes:
             raise ValueError("kind=interval uchun interval_minutes majburiy")
         if self.kind == ScheduleKind.DAILY_AT and not self.daily_at_time:
@@ -118,7 +118,7 @@ class PipelineConfig(BaseModel):
         return cleaned
 
     @model_validator(mode="after")
-    def merge_requires_primary_key(self) -> "PipelineConfig":
+    def merge_requires_primary_key(self) -> PipelineConfig:
         if self.write_disposition == WriteDisposition.MERGE and not self.primary_key:
             raise ValueError(
                 "write_disposition=merge uchun primary_key majburiy "

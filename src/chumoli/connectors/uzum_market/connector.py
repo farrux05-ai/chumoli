@@ -28,7 +28,6 @@ from chumoli.core.manifest import (
     ConnectorManifest,
     FieldSpec,
     FieldType,
-    SelectOption,
 )
 
 UZUM_BASE_URL     = "https://api-seller.uzum.uz/api"

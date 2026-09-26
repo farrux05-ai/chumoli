@@ -28,7 +28,6 @@ Ro'yxatga olish:
 
 from __future__ import annotations
 
-import time
 from collections.abc import Iterator
 from datetime import date, datetime, timedelta
 from typing import Any
