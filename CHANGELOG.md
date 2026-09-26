@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Dashboard run stats: load-OK but quality-fail runs no longer counted as
+  "Muvaffaqiyatli"; new `quality_warn` field so "Quality ogohlantirish" card is accurate
+
 ## 0.1.0 — 2026-09-23
 
 ### Added

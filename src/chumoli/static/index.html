@@ -901,7 +901,8 @@ async function renderRuns(){
   const total=runStats.total_runs??runs.length;
   const ok=runStats.success??runs.filter(r=>r.success&&r.quality_passed).length;
   const fail=runStats.failed??runs.filter(r=>!r.success).length;
-  const warn=total-ok-fail;
+  // Prefer backend quality_warn; fallback for older API
+  const warn=runStats.quality_warn??Math.max(0,total-ok-fail);
 
   c.innerHTML=`
     <div class="page-hd">

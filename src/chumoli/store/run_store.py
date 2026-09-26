@@ -189,10 +189,19 @@ class RunStore:
         return [self._row_to_dict(r) for r in rows]
 
     def stats(self) -> dict[str, Any]:
+        """Aggregate run counts for the dashboard.
+
+        - success: load OK **and** quality passed
+        - quality_warn: load OK but quality failed
+        - failed: load itself failed
+        """
         with self._connect() as conn:
             total = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
             ok = conn.execute(
-                "SELECT COUNT(*) FROM runs WHERE success = 1"
+                "SELECT COUNT(*) FROM runs WHERE success = 1 AND quality_passed = 1"
+            ).fetchone()[0]
+            quality_warn = conn.execute(
+                "SELECT COUNT(*) FROM runs WHERE success = 1 AND quality_passed = 0"
             ).fetchone()[0]
             fail = conn.execute(
                 "SELECT COUNT(*) FROM runs WHERE success = 0"
@@ -206,6 +215,7 @@ class RunStore:
         return {
             "total_runs": total,
             "success": ok,
+            "quality_warn": quality_warn,
             "failed": fail,
             "last_run_at": last[0] if last else None,
             "total_rows_loaded": int(row_sum or 0),
