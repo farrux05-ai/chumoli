@@ -97,7 +97,6 @@ def build_dlt_pipeline(config: PipelineConfig) -> dlt.Pipeline:
         ensure_runtime_dirs,
         pipelines_dir,
         resolve_duckdb_path,
-        resolve_filesystem_url,
         resolve_s3_url,
     )
 
@@ -454,6 +453,7 @@ def _execute(stored: StoredPipeline, connector: BaseUZConnector) -> RunResult:
             publish_filesystem_export,
             resolve_filesystem_url,
         )
+        from pathlib import Path
 
         try:
             staging_root = fs_staging_dir(name)
