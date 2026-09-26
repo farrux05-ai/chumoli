@@ -17,6 +17,7 @@ Fix'lar (v1):
 from __future__ import annotations
 
 import hashlib
+import time
 from collections.abc import Iterator
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -30,7 +31,6 @@ from chumoli.core.manifest import (
     ConnectorManifest,
     FieldSpec,
     FieldType,
-    SelectOption,
 )
 
 CLICK_BASE_URL    = "https://api.click.uz/v2/merchant"
