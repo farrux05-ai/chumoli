@@ -2,7 +2,18 @@
 
 **Verified:** 2026-09-26
 
-## Latest (bug fixes + docs)
+## Latest (run error handling)
+
+- **Failures are persisted** for manual (sync), async and demo runs — previously only
+  scheduler runs recorded failures, so a dashboard-triggered failure left no trace.
+- **Error reason captured:** `RunResult.error` / `RunResponse.error` carry the dlt
+  failed-jobs reason; the dashboard run history renders it (red text under the badge).
+- **Credential redaction:** `core/errors.py` (`sanitize_error`) strips passwords/tokens
+  from connection strings, `Authorization`/`Bearer` and `key=value` secrets before
+  anything is stored, returned or shown. `friendly_error` maps to plain Uzbek.
+- `409 already running` is intentionally **not** recorded as a failure.
+
+## Prior (bug fixes + docs)
 
 - **Fixed:** Click connector auth raised `NameError` (`time` not imported) — connector was unusable.
 - **Fixed:** filesystem export silently did nothing (`Path` undefined in `_execute`, swallowed by `except Exception`).

@@ -2,9 +2,19 @@
 
 ## Unreleased
 
+### Added
+- Failed runs are now persisted to run history for manual (sync), async and demo
+  runs. Previously only scheduler runs recorded failures, so a dashboard-triggered
+  failure left no trace beyond a transient toast.
+- `RunResult.error` / `RunResponse.error`: the dlt failed-jobs reason is captured
+  and shown in the dashboard run history.
+- `core/errors.py`: credential redaction (`sanitize_error`) and friendly mapping
+  (`friendly_error`) so stored/displayed errors never leak passwords or tokens.
+
 ### Fixed
 - Dashboard run stats: load-OK but quality-fail runs no longer counted as
   "Muvaffaqiyatli"; new `quality_warn` field so "Quality ogohlantirish" card is accurate
+- Run history now shows the failure reason (redacted) instead of only a red badge
 
 ## 0.1.0 — 2026-09-23
 
