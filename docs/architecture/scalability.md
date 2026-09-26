@@ -13,9 +13,9 @@ file by exactly two lines.** Nothing else. See
 [`../skills/write-connector.md`](../skills/write-connector.md) for the literal steps.
 
 ```
-connectors/<name>/manifest.py     # NEW — field list, labels, category
-connectors/<name>/connector.py    # NEW — build_dlt_source() implementation
-connectors/__init__.py            # +2 lines — import + registry.register(...)
+connectors/<name>/__init__.py      # NEW — package marker
+connectors/<name>/connector.py     # NEW — MANIFEST + build_dlt_source() implementation
+connectors/__init__.py             # +2 lines — import + registry.register(...)
 ```
 
 ## Where scalability could have broken, and how each was avoided

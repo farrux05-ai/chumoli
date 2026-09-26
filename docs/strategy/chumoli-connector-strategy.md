@@ -5,6 +5,12 @@
 **Sana:** 2026-09-18  
 **Bog‘liqlik:** Claude/dashboard migratsiyasidan mustaqil; fundament + bozor + dlt faktlariga asoslangan.
 
+> **Holat (2026-09-26):** reja qisman bajarildi. Kodda mavjud: PostgreSQL/MySQL/
+> REST/SQL connectorlar, DuckDB/PostgreSQL/Filesystem/S3/ClickHouse destinationlar,
+> Click/Payme/Uzum/Didox connectorlar (**beta**). Hali yozilmagan: 1C, Soliq,
+> MyGov, Google Analytics/Sheets. Quyidagi jadvaldagi “Phase”/“Qachon” ustunlari
+> — dastlabki reja; haqiqiy holat uchun `docs/status.md` ga qarang.
+
 ---
 
 ## 1. Asosiy printsiplar
@@ -29,7 +35,7 @@
 | `sql_database` | **MySQL** | MySQL / MariaDB | Wrap qilinadi (mavjud) |
 | `sql_database` | **SQL Server** (ixtiyoriy) | MSSQL | Keyinroq, talab bo‘lsa |
 | `rest_api` | **REST API** | Har qanday REST (auth, pagination, incremental) | Wrap qilinadi (mavjud) |
-| `filesystem` | **Filesystem / S3** | Local, S3, GCS, Azure, SFTP; CSV/JSONL/Parquet | Hali yo‘q — Phase 0 |
+| `filesystem` | **Filesystem / S3** | Local, S3, GCS, Azure, SFTP; CSV/JSONL/Parquet | Mavjud (wrap qilingan) |
 
 **Muhim:** foydalanuvchi “sql_database” deb ko‘rmaydi. Kartochkada **PostgreSQL**, **MySQL**, **REST API**, **S3 / Files** ko‘rinadi. Ichida bitta `sql_database` adapter, lekin manifest alohida (turli default credential field’lar).
 

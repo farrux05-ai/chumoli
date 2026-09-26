@@ -89,7 +89,8 @@ UI/API
 
 - `manual` — UI/CLI only
 - `interval` — APScheduler in API process
-- `airflow` — export only
+- `daily_at` — APScheduler cron in API process
+- `airflow` — reserved enum only; no integration (API rejects it, scheduler skips it)
 
 ## Where does change X go?
 

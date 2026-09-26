@@ -1,5 +1,9 @@
 # Chumoli — API / Connector Maintenance Strategy
 
+> **Holat (2026-09-26):** bu **taklif** — `connectors_monitor/` va
+> `.github/workflows/connector-monitor.yml` hali repoda yo'q. Hujjat kelajakdagi
+> monitoring rejasini saqlaydi.
+
 **Muammo:** tashqi API o‘zgarsa connector “jim” buziladi.  
 **Maqsad:** oyiga (yoki haftada) avtomatik scan → o‘zgarish topilsa GitHub **issue** ochilsin → siz tuzatasiz.  
 **Sana:** 2026-09-18

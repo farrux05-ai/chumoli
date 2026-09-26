@@ -15,7 +15,7 @@ Main flows:
 
 - Connector selection from manifests
 - Pipeline CRUD, Run (sync/async), Preview, schedule
-- Recovery actions that wrap free dlt CLI (`trace`, `failed-jobs`, `sync`, `drop`, `drop-pending-packages` — see `dlt-boundary.md`)
+- Recovery actions that wrap free dlt CLI (`failed-jobs`, `sync`, `drop-pending`, `drop-resource` — see `dlt-boundary.md`)
 
 ### Filesystem / S3 preview
 

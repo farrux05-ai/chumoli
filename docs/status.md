@@ -1,32 +1,43 @@
-## Latest (0.1.0 packaging)
+# Status
+
+**Verified:** 2026-09-26
+
+## Latest (bug fixes + docs)
+
+- **Fixed:** Click connector auth raised `NameError` (`time` not imported) — connector was unusable.
+- **Fixed:** filesystem export silently did nothing (`Path` undefined in `_execute`, swallowed by `except Exception`).
+- **Fixed:** wheel build failed on duplicate `chumoli/static/index.html` (redundant `force-include`).
+- Version is now single-sourced from `src/chumoli/__init__.py` (`pyproject.toml` + FastAPI app read it dynamically).
+- Docs refreshed: architecture/strategy docs corrected; `docs/original-positioning/` marked historical.
+
+## Prior (0.1.0 packaging)
 
 - UZ connectors marked **beta** (`maturity` on manifest + UI badge).
 - README: `pip install chumoli` primary path; PyPI classifiers.
 - Filesystem: `_dlt_*` stays in `~/.chumoli/fs_staging/`; publish clean data only.
 
-# Status
-
-**Verified:** 2026-09-22
-
-## Latest (filesystem / S3)
+## Prior (filesystem / S3)
 
 - Catalog: **`filesystem`** (local only) vs **`s3`** (object storage) — both use `dlt.destinations.filesystem`.
 - Local exports: **`~/chumoli-data/exports/<pipeline>/`** (user-visible). dlt state remains under **`~/.chumoli/pipelines/`**.
 - Preview for local filesystem: `export_path`, file list (skips `_dlt*`), CSV sample + copy/open in UI.
-- Removed duplicate repo-root `static/`; canonical UI is `src/chumoli/static/index.html`.
+- Canonical UI is `src/chumoli/static/index.html` (no duplicate repo-root `static/`).
 - Docs aligned: dashboard is static HTML (not marimo / not dltHub).
 
 ## Prior (dest connection isolation)
+
 - **UI:** Destination connection cached **per destination key** (`_destConnByKey`).
 - **API:** Reject create when destination extra is not installed.
 - **Runner:** Scheme mismatch guard between destination types.
 
 ## Prior (still valid)
+
 - Async run: `POST /api/pipelines/{name}/run/async` + `GET /api/runs/jobs/{id}`
 - API key constant-time compare
 - Telegram token via encrypted settings
 
 ## Tests
+
 ```bash
 PYTHONPATH=src python -m pytest tests/ -q
 ```

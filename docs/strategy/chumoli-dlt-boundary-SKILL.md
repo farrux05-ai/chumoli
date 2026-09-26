@@ -23,14 +23,14 @@ Before using any dlt feature or installing any related package:
 | `rest_api_source`, `sql_database`, `filesystem` | Universal sources | connectors/rest_api, sql_database |
 | Schema inference, incremental state, load packages | Core pipeline engine | pipeline_runner.py |
 | `schema_contract` | Structural quality (evolve/freeze tables/columns) | Planned, not wired yet |
-| CLI `dlt pipeline <name> trace` | Full last-run trace | Recovery panel |
+| CLI `dlt pipeline <name> trace` | Full last-run trace | Available, not surfaced in UI yet |
 | CLI `dlt pipeline <name> failed-jobs` | Failed jobs + error text | Recovery panel |
 | CLI `dlt pipeline <name> sync` | Restore local state from destination | Recovery panel |
 | CLI `dlt pipeline <name> drop <resource>` | Reset one resource state | Recovery panel |
 | CLI `dlt pipeline <name> drop-pending-packages` | Clear half-loaded packages | Recovery panel |
 | Automatic retry + terminal error detection | Built-in | Do not reimplement |
-| `dlt.helpers.airflow_helper.PipelineTasksGroup` | Airflow task group wrapper | Scheduler / Airflow option |
-| `dlt deploy <pipeline> airflow-composer` | Generates Airflow DAG | Do not rewrite — already free |
+| `dlt.helpers.airflow_helper.PipelineTasksGroup` | Airflow task group wrapper | Not used — no Airflow integration |
+| `dlt deploy <pipeline> airflow-composer` | Generates Airflow DAG | Not used — no Airflow integration |
 
 Note on `dlthub.com/products/orchestration`: the domain looks commercial, but `PipelineTasksGroup` and `dlt deploy` live in the open-source `dlt` repo. Judge by the package, not the domain name.
 

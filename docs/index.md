@@ -21,3 +21,16 @@
 - [dlt-boundary.md](architecture/dlt-boundary.md)
 - [config-and-manifest.md](architecture/config-and-manifest.md)
 - [security.md](architecture/security.md)
+- [dashboard.md](architecture/dashboard.md)
+- [data-filtering.md](architecture/data-filtering.md)
+- [quality-and-reliability.md](architecture/quality-and-reliability.md)
+- [scheduling-and-concurrency.md](architecture/scheduling-and-concurrency.md)
+- [scalability.md](architecture/scalability.md)
+
+## Strategy & history
+
+- [Connector strategy](strategy/chumoli-connector-strategy.md)
+- [API maintenance (proposal)](strategy/chumoli-api-maintenance.md)
+- [dlt boundary skill](strategy/chumoli-dlt-boundary-SKILL.md)
+- [Original positioning (historical)](original-positioning/POSITIONING.md)
+- [Original roadmap (historical)](original-positioning/ROADMAP.md)

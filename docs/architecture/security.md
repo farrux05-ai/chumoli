@@ -59,8 +59,10 @@ store is write-heavy relative to that (every pipeline create/edit from
 the dashboard writes here) and needs reliable concurrent-write
 behavior (dashboard, CLI, and a background run could all touch it).
 SQLite in WAL mode handles this well; DuckDB is not designed for it.
-`chumoli_runs` (run history — separate file, analytical, append-mostly)
-is the right fit for DuckDB; pipeline config is not.
+Run history lives in a **separate SQLite file** (`chumoli_runs.db`) — it
+is append-mostly and low-volume, so it stays on SQLite too. DuckDB is
+reserved for the analytical destination data, not for control-plane
+metadata.
 
 ## The one enforced invariant: secrets can never leak into `source_params`
 

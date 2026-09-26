@@ -93,6 +93,7 @@ Lokal fayl va S3 katalogda **alohida**. dlt `_dlt_*` metadata yashirin staging d
 
 ~/chumoli-data/             # foydalanuvchi ko‘radigan
   <pipeline>.duckdb
+  warehouse.duckdb          # path ko‘rsatilmagan DuckDB uchun fallback
   examples/
   exports/<pipeline>/       # toza CSV/Parquet
 ```

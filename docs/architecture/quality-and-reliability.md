@@ -27,13 +27,12 @@ Covers: data quality checks, failure recovery, notifications.
 
 | dlt tool | What it does | How Chumoli exposes it |
 |---|---|---|
-| `dlt pipeline <name> failed-jobs` | Lists failed jobs with error messages | "Why did it fail?" button in dashboard |
-| `dlt pipeline <name> drop-pending-packages` | Clears half-loaded packages | Part of "Retry" action |
-| `dlt pipeline <name> sync` | Restores local state from the destination | "Sync from destination" button |
-| `dlt pipeline <name> drop <resource>` | Resets one resource's table + state | "Reset this table only" button |
-| `dlt pipeline <name> trace` | Full trace of the last run | Debug view |
+| `dlt pipeline <name> failed-jobs` | Lists failed jobs with error messages | "Tiklash" drawer lists failed jobs in plain Uzbek |
+| `dlt pipeline <name> drop-pending-packages` | Clears half-loaded packages | "Kutayotgan paketlarni tozalash" button |
+| `dlt pipeline <name> sync` | Restores local state from the destination | "Destination bilan sinxronlashtirish" button |
+| `dlt pipeline <name> drop <resource>` | Resets one resource's table + state | "Jadvalni qayta o'rnatish" button |
 | Automatic retry on transient errors | dlt retries network blips on its own | Nothing to build — happens silently |
-| `schema_contract` (`evolve`/`freeze`/`discard_row`/`discard_value`) | Gate structural changes (new table/column/type) at ingestion | Exposed as a per-pipeline setting in the connector form: "if the source adds a new field, should we accept it, reject it, or drop just that field?" |
+| `schema_contract` (`evolve`/`freeze`/`discard_row`/`discard_value`) | Gate structural changes (new table/column/type) at ingestion | Not exposed yet — dlt's default `evolve` behavior applies |
 
 **What Chumoli adds on top (the only new code needed here):** small
 wrapper functions in `pipeline_runner.py` that call these dlt CLI

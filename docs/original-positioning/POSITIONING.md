@@ -1,5 +1,13 @@
 # Chumoli — Senior DE Positioning: Who We Are and What We Do
 
+> **Tarixiy hujjat (2026-09-26):** bu dastlabki reja — YAML-first config,
+> Airflow DAG generator, `soliq_uz`/`mygov`/`onec_odata` connectorlar va
+> DuckDB metadata store'ni tasvirlaydi. **Bularning ko'pi amalga oshirilmadi
+> yoki o'zgardi:** mahsulot endi YAML emas, manifest-driven UI; Airflow
+> integratsiyasi yo'q; run history SQLite'da. Haqiqiy holat uchun
+> `docs/status.md` va `docs/architecture/` ga qarang. Bu fayl tarix uchun
+> saqlanadi.
+
 ---
 
 ## 1. Stack Architecture & Integrated Tools

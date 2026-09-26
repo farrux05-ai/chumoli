@@ -21,14 +21,14 @@ qidiruv natijasiga ishonmasdan) tasdiqlangan.
 | `rest_api_source`, `sql_database`, `filesystem` | Universal source'lar | `src/chumoli/connectors/rest_api/`, `sql_database/` |
 | Schema inference, incremental state, load packages | Pipeline engine o'zagi | `pipeline_runner.py` orqali |
 | `schema_contract` (`{"tables": "evolve/freeze", "columns": ..., "data_type": ...}`) | Strukturaviy sifat nazorati: yangi jadval/ustun/tur kelganda nima qilish | Hali ulanmagan — [`quality-and-reliability.md`](quality-and-reliability.md)da rejalashtirilgan |
-| CLI: `dlt pipeline <name> trace` | Oxirgi run'ning to'liq izi | [`quality-and-reliability.md`](quality-and-reliability.md) — Tiklash bo'limi |
+| CLI: `dlt pipeline <name> trace` | Oxirgi run'ning to'liq izi | Mavjud, lekin UI'da hali ko'rsatilmagan |
 | CLI: `dlt pipeline <name> failed-jobs` | Muvaffaqiyatsiz job'lar va xato matni | xuddi shu |
 | CLI: `dlt pipeline <name> sync` | Mahalliy holatni destination'dan tiklaydi | xuddi shu |
 | CLI: `dlt pipeline <name> drop <resource>` | Bitta resource holatini tiklaydi | xuddi shu |
 | CLI: `dlt pipeline <name> drop-pending-packages` | Yarim yuklangan package'larni tozalaydi | xuddi shu |
 | Avtomatik retry (transient xatolar) + terminal xato aniqlash | O'zi qayta uradi yoki to'xtaydi | Hech narsa qilinmaydi — dlt o'zi boshqaradi |
-| `dlt.helpers.airflow_helper.PipelineTasksGroup` | Pipeline'ni Airflow task group sifatida o'raydi, retry policy, log routing | Scheduler/Airflow integratsiyasida ishlatiladi |
-| `dlt deploy <pipeline> airflow-composer` | Tayyor Airflow DAG generatsiya qiladi | POSITIONING.md dagi "Airflow DAG generator" — bu ALLAQACHON dlt'ning o'zida, qayta yozilmaydi |
+| `dlt.helpers.airflow_helper.PipelineTasksGroup` | Pipeline'ni Airflow task group sifatida o'raydi, retry policy, log routing | Ishlatilmaydi — Chumoli'da Airflow integratsiyasi yo'q |
+| `dlt deploy <pipeline> airflow-composer` | Tayyor Airflow DAG generatsiya qiladi | Ishlatilmaydi — dlt'ning o'zida bor, Chumoli qayta yozmaydi va UI'ga chiqarmaydi |
 
 **Muhim eslatma `dlthub.com/products/orchestration` haqida:** bu sahifa
 domen nomi bo'yicha tijorat ko'rinadi, lekin tavsiflagan narsasi

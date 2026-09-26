@@ -1,5 +1,10 @@
 # Chumoli — Product Roadmap & Architecture Plan
 
+> **Tarixiy hujjat (2026-09-26):** bu dastlabki reja. YAML-first config,
+> `soliq_uz`/`mygov`/`onec_odata` connectorlar va DuckDB metadata store
+> tasvirlangan — bular amalga oshirilmadi yoki o'zgardi. Haqiqiy holat uchun
+> `docs/status.md` va `docs/architecture/` ga qarang.
+
 > **Goal:** Lightweight, YAML-based EL data pipeline tool tailored for Uzbekistan data sources. EL only. Thin architectural layer.
 
 ---
