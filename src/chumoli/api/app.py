@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError
 
+from chumoli import __version__
 from chumoli.connectors import register_builtin_connectors
 from chumoli.core.logging_setup import configure_logging
 import structlog
@@ -67,7 +68,7 @@ def _cors_origins() -> list[str]:
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 
-app = FastAPI(title="Chumoli", version="0.1.0", docs_url="/api/docs")
+app = FastAPI(title="Chumoli", version=__version__, docs_url="/api/docs")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
@@ -410,7 +411,7 @@ def health() -> dict[str, object]:
     return {
         "status": "ok",
         "service": "chumoli",
-        "version": "0.1.0",
+        "version": __version__,
         "scheduler_running": sched.get("running", False),
         "scheduler_jobs": sched.get("job_count", 0),
         "run_queue": sched.get("run_queue", {}),

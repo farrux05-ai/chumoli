@@ -1,6 +1,6 @@
 [project]
 name = "chumoli"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Lightweight EL tool for Uzbekistan data sources, built on dlt"
 readme = "README.md"
 license = "Apache-2.0"
@@ -50,6 +50,8 @@ chumoli-api = "chumoli.api.app:main"
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "build>=1.2",
+    "twine>=5.0",
 ]
 postgres = [
     "dlt[postgres]>=1.30",
@@ -62,20 +64,23 @@ clickhouse = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "src/chumoli/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/chumoli"]
 
 [tool.hatch.build.targets.wheel.sources]
 "src/chumoli" = "chumoli"
 
-# Dashboard lives in src/chumoli/static (packaged with the wheel).
-[tool.hatch.build.targets.wheel.force-include]
-"src/chumoli/static" = "chumoli/static"
+# Dashboard lives in src/chumoli/static and is included automatically via
+# `packages = ["src/chumoli"]`; no force-include needed (it would duplicate it).
 
 [tool.hatch.build.targets.sdist]
 include = [
     "src/chumoli",
     "README.md",
+    "CHANGELOG.md",
     "pyproject.toml",
 ]
 
