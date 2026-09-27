@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- Source connectors: **Filesystem / S3** (`filesystem_s3`, dlt `readers`),
+  **MoySklad** (JSON API 1.2), **Bitrix24** (inbound webhook / OAuth REST)
 - Failed runs are now persisted to run history for manual (sync), async and demo
   runs. Previously only scheduler runs recorded failures, so a dashboard-triggered
   failure left no trace beyond a transient toast.

@@ -19,7 +19,7 @@
 
 ---
 
-SQL, REST va O‘zbekiston manbalaridan (Click, Payme, Uzum, Didox — **beta**) ma’lumotni olib **DuckDB**, **PostgreSQL**, **lokal fayl** yoki **S3** ga yuklang. Brauzerda boshqaring yoki CLI orqali ishga tushiring.
+SQL, REST, fayl/S3, MoySklad, Bitrix24 va O‘zbekiston manbalaridan (Click, Payme, Uzum, Didox — **beta**) ma’lumotni olib **DuckDB**, **PostgreSQL**, **lokal fayl** yoki **S3** ga yuklang. Brauzerda boshqaring yoki CLI orqali ishga tushiring.
 
 ## Tez boshlash
 
@@ -58,7 +58,7 @@ UI dagi demo: SQL → DuckDB, REST (CBU valyuta kurslari) → DuckDB, Volume (si
 
 | Imkoniyat | Izoh |
 |-----------|------|
-| Ulagichlar | SQL, REST, sintetik volume (**stable**); Click, Payme, Uzum, Didox (**beta**) |
+| Ulagichlar | SQL, REST, Filesystem/S3, MoySklad, Bitrix24, sintetik volume (**stable**); Click, Payme, Uzum, Didox (**beta**) |
 | Destinationlar | DuckDB, PostgreSQL, lokal CSV/Parquet, S3/GCS/…, ClickHouse |
 | Dashboard | Yaratish, Run, Preview, runs tarixi, scheduler |
 | Xavfsizlik | Secrets Fernet bilan shifrlangan; API kalit |

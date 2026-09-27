@@ -1,8 +1,18 @@
 # Status
 
-**Verified:** 2026-09-26
+**Verified:** 2026-09-27
 
-## Latest (ClickHouse / load performance)
+## Latest (V1 source connectors)
+
+- **`filesystem_s3`** — dlt `readers` thin wrap (local + `s3://` / `gs://` / `az://`).
+  CSV via DuckDB reader (pandas yo‘q), Parquet, JSONL. Lokal e2e: JSONL → DuckDB.
+- **`moysklad`** — JSON API 1.2 (`api.moysklad.ru/api/remap/1.2`). Bearer yoki
+  Basic (`login:parol`). Resurslar: customerorder, demand, invoiceout, product,
+  retaildemand, stock. `Accept-Encoding: gzip` (rasmiy 415 himoyasi).
+- **`bitrix24`** — inbound webhook yoki portal + OAuth. `crm.deal.list`,
+  `crm.lead.list`, `crm.contact.list`, `tasks.task.list`. Pagination `start`/`next`.
+
+## Prior (ClickHouse / load performance)
 
 - **ClickHouse loader format:** `parquet` instead of dlt's `jsonl` default
   (columnar + compressed; `clickhouse_connect.insert_file` is far faster).
