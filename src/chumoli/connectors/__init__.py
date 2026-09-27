@@ -13,8 +13,11 @@ from chumoli.connectors.base import registry
 
 def register_builtin_connectors() -> None:
     """Universal + UZ payment/gov connectorlarni ro'yxatga oladi."""
+    from chumoli.connectors.bitrix24.connector import Bitrix24Connector
     from chumoli.connectors.click_uz.connector import ClickConnector
     from chumoli.connectors.didox.connector import DidoxConnector
+    from chumoli.connectors.filesystem_s3.connector import FilesystemS3Connector
+    from chumoli.connectors.moysklad.connector import MoySkladConnector
     from chumoli.connectors.payme_uz.connector import PaymeConnector
     from chumoli.connectors.rest_api.connector import RestApiConnector
     from chumoli.connectors.sql_database.connector import (
@@ -32,10 +35,13 @@ def register_builtin_connectors() -> None:
         ("postgresql", PostgreSQLConnector),
         ("mysql", MySQLConnector),
         ("sql_database", SqlDatabaseConnector),
+        ("filesystem_s3", FilesystemS3Connector),
         ("click_uz", ClickConnector),
         ("payme_uz", PaymeConnector),
         ("uzum_market", UzumMarketConnector),
         ("didox", DidoxConnector),
+        ("moysklad", MoySkladConnector),
+        ("bitrix24", Bitrix24Connector),
         ("synthetic_volume", SyntheticVolumeConnector),
     ]
     for key, cls in builtins:

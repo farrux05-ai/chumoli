@@ -86,6 +86,9 @@ def test_connectors_include_v1(api) -> None:
         "payme_uz",
         "uzum_market",
         "synthetic_volume",
+        "filesystem_s3",
+        "moysklad",
+        "bitrix24",
     ):
         assert needed in keys
 

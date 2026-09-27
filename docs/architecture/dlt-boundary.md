@@ -18,7 +18,7 @@ qidiruv natijasiga ishonmasdan) tasdiqlangan.
 
 | Imkoniyat | Nima beradi | Qayerda ishlatiladi (Chumoli'da) |
 |---|---|---|
-| `rest_api_source`, `sql_database`, `filesystem` | Universal source'lar | `src/chumoli/connectors/rest_api/`, `sql_database/` |
+| `rest_api_source`, `sql_database`, `filesystem` | Universal source'lar | `src/chumoli/connectors/rest_api/`, `sql_database/`, `filesystem_s3/` |
 | Schema inference, incremental state, load packages | Pipeline engine o'zagi | `pipeline_runner.py` orqali |
 | `schema_contract` (`{"tables": "evolve/freeze", "columns": ..., "data_type": ...}`) | Strukturaviy sifat nazorati: yangi jadval/ustun/tur kelganda nima qilish | Hali ulanmagan — [`quality-and-reliability.md`](quality-and-reliability.md)da rejalashtirilgan |
 | CLI: `dlt pipeline <name> trace` | Oxirgi run'ning to'liq izi | Mavjud, lekin UI'da hali ko'rsatilmagan |
