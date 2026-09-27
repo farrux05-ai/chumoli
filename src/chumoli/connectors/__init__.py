@@ -16,6 +16,7 @@ def register_builtin_connectors() -> None:
     from chumoli.connectors.bitrix24.connector import Bitrix24Connector
     from chumoli.connectors.click_uz.connector import ClickConnector
     from chumoli.connectors.didox.connector import DidoxConnector
+    from chumoli.connectors.facebook_ads.connector import FacebookAdsConnector
     from chumoli.connectors.filesystem_s3.connector import FilesystemS3Connector
     from chumoli.connectors.moysklad.connector import MoySkladConnector
     from chumoli.connectors.payme_uz.connector import PaymeConnector
@@ -42,6 +43,7 @@ def register_builtin_connectors() -> None:
         ("didox", DidoxConnector),
         ("moysklad", MoySkladConnector),
         ("bitrix24", Bitrix24Connector),
+        ("facebook_ads", FacebookAdsConnector),
         ("synthetic_volume", SyntheticVolumeConnector),
     ]
     for key, cls in builtins:

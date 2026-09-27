@@ -45,6 +45,7 @@ UI da ochiq yoziladi: “Sandbox yo‘q — o‘zing credential berib sinab ko�
 | `click_uz` | Click | Sandbox yo‘q, live only | Experimental (mavjud kod saqlanadi) |
 | `uzum_market` | Uzum Market / Seller | Credential-gated, live only | Experimental (mavjud kod saqlanadi) |
 | `didox` | Didox | Sandbox yo‘q | Experimental (mavjud kod saqlanadi) |
+| `facebook_ads` | Meta Ads (Facebook) | dlt Community source, sandbox yo‘q, real token kerak | Experimental (yozildi) |
 | `uzum_bank` | Uzum Bank | Self-service sandbox yo‘q, account manager kerak | Skeleton + experimental — **hali yozilmagan** |
 
 **Qoida:** Experimental connectorlar V1 katalogda ko‘rinadi, lekin default “Tayyor” ro‘yxatida emas. Pilot mijoz credential bersa — tezda Tayyor ga o‘tkaziladi.
@@ -88,11 +89,12 @@ filesystem_s3      ← yozildi
 moysklad           ← yozildi
 bitrix24           ← yozildi
 
-Experimental (4):
+Experimental (5):
 ─────────────────────────────
 click_uz
 uzum_market
 didox
+facebook_ads       ← yozildi (Meta Marketing API, beta)
 uzum_bank          ← skeleton (hali yo'q)
 ```
 
