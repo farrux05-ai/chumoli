@@ -209,9 +209,13 @@ def _paginate(
         if nxt is None:
             if len(items) < BITRIX_PAGE_SIZE:
                 break
-            start += BITRIX_PAGE_SIZE
-            continue
-        start = int(nxt)
+            next_start = start + BITRIX_PAGE_SIZE
+        else:
+            next_start = int(nxt)
+        # `next` 0 yoki oldinga siljimasa — progress yo'q, cheksiz loop'ni to'xtatamiz
+        if next_start <= start:
+            break
+        start = next_start
 
 
 def _make_resource(

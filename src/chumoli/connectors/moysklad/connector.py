@@ -43,7 +43,10 @@ from chumoli.core.retry_policy import uz_api_retry
 
 MOYSKLAD_BASE_URL = "https://api.moysklad.ru/api/remap/1.2"
 MOYSKLAD_PAGE_SIZE = 1000
-TZ_TASHKENT = ZoneInfo("Asia/Tashkent")
+# MoySklad barcha sanalarni Moskva vaqtida (UTC+3) qaytaradi va kutadi.
+# Tashkent (UTC+5) ishlatilsa, `updated>=` oynasi 2 soat oldinga surilib,
+# o'sha 2 soatda o'zgargan yozuvlar incremental merge'ga tushmay qolardi.
+TZ_MOYSKLAD = ZoneInfo("Europe/Moscow")
 
 # entity path relative to base; stock is a report endpoint
 RESOURCE_PATHS: dict[str, str] = {
@@ -131,18 +134,43 @@ def parse_resources(raw: str | None) -> list[str]:
 
 
 def updated_filter(from_days_ago: int) -> str:
-    """MoySklad filter: updated>=YYYY-MM-DD HH:MM:SS (Toshkent)."""
+    """MoySklad filter: updated>=YYYY-MM-DD HH:MM:SS (Moskva — server vaqti)."""
     days = max(0, int(from_days_ago))
-    start = datetime.now(TZ_TASHKENT).replace(
+    start = datetime.now(TZ_MOYSKLAD).replace(
         hour=0, minute=0, second=0, microsecond=0
     ) - timedelta(days=days)
     return f"updated>={start.strftime('%Y-%m-%d %H:%M:%S')}"
 
 
-def _attach_href(row: dict[str, Any]) -> dict[str, Any]:
+def _row_key(row: dict[str, Any]) -> str | None:
+    """`stock` report satri uchun barqaror merge kaliti.
+
+    Qoldiq (`report/stock/all`) satrlarida oddiy `id` bo'lmaydi — havola
+    `meta.href` da (product'ga ishora qiladi). `?expand=...` kabi query'larni
+    olib tashlaymiz, aks holda kalit run'lar orasida o'zgarib ketadi.
+    """
+
+    def _clean(href: str) -> str:
+        return href.split("?", 1)[0]
+
     meta = row.get("meta")
     if isinstance(meta, dict) and meta.get("href"):
-        row["_href"] = meta["href"]
+        return _clean(str(meta["href"]))
+    product = row.get("product")
+    if isinstance(product, dict):
+        if product.get("id"):
+            return str(product["id"])
+        pmeta = product.get("meta")
+        if isinstance(pmeta, dict) and pmeta.get("href"):
+            return _clean(str(pmeta["href"]))
+    rid = row.get("id")
+    return str(rid) if rid else None
+
+
+def _attach_href(row: dict[str, Any]) -> dict[str, Any]:
+    key = _row_key(row)
+    if key:
+        row["_href"] = key
     return row
 
 
@@ -250,6 +278,7 @@ class MoySkladConnector:
         token = secrets.get("token") or ""
         resources = parse_resources(str(params.get("resources") or "all"))
         days = int(params.get("from_days_ago") or 7)
+        # base_url manifestda yo'q — faqat test/integratsiya uchun override
         base_url = str(params.get("base_url") or MOYSKLAD_BASE_URL).rstrip("/")
         return moysklad_source(
             token=token,

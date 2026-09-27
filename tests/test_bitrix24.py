@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+import httpx
 import pytest
 
 from chumoli.connectors import register_builtin_connectors
 from chumoli.connectors.base import registry
 from chumoli.connectors.bitrix24.connector import (
+    BITRIX_PAGE_SIZE,
+    _paginate,
     extract_items,
     is_webhook_url,
     method_url,
@@ -93,3 +98,39 @@ def test_portal_without_oauth_raises() -> None:
             {"resources": "leads"},
             {"webhook_url": "https://shop.bitrix24.uz"},
         )
+
+
+class _FakePostClient:
+    """`_paginate` uchun minimal client o'rnini bosuvchi (tarmoqsiz)."""
+
+    def __init__(self, pages: list[dict[str, Any]]) -> None:
+        self.pages = pages
+        self.calls = 0
+
+    def post(self, url: str, json: dict[str, Any]) -> httpx.Response:
+        page = self.pages[min(self.calls, len(self.pages) - 1)]
+        self.calls += 1
+        request = httpx.Request("POST", url, json=json)
+        return httpx.Response(200, json=page, request=request)
+
+
+_URL = "https://shop.bitrix24.uz/rest/1/tok/crm.deal.list.json"
+
+
+def test_paginate_follows_next() -> None:
+    items = [{"ID": str(i)} for i in range(BITRIX_PAGE_SIZE)]
+    client = _FakePostClient(
+        [{"result": items, "next": BITRIX_PAGE_SIZE}, {"result": [{"ID": "last"}]}]
+    )
+    rows = list(_paginate(client, _URL, {}, None))
+    assert len(rows) == BITRIX_PAGE_SIZE + 1
+    assert client.calls == 2
+
+
+def test_paginate_stops_when_next_does_not_advance() -> None:
+    """`next: 0` da start yana 0 bo'lib, ilgari cheksiz loop bo'lardi."""
+    items = [{"ID": str(i)} for i in range(BITRIX_PAGE_SIZE)]
+    client = _FakePostClient([{"result": items, "next": 0}])
+    rows = list(_paginate(client, _URL, {}, None))
+    assert len(rows) == BITRIX_PAGE_SIZE
+    assert client.calls == 1

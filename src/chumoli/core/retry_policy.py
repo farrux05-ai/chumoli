@@ -35,11 +35,20 @@ from tenacity import (
 log = structlog.get_logger("chumoli.retry")
 
 
+def is_transient_status_code(code: int) -> bool:
+    """429 va 5xx → retry qilinadi. Qolgan 4xx (401, 404) → darhol fail.
+
+    Yagona manba: connector'lar ham shundan foydalanadi — masalan Meta API
+    JSON xato javobini `HTTPStatusError`ga aylantirganda, tenacity uni
+    retry qilishi uchun aynan shu qoida kerak.
+    """
+    return code == 429 or code >= 500
+
+
 def is_transient_http(exc: BaseException) -> bool:
     """429 va 5xx → retry. 4xx (401, 404) → darhol fail."""
     if isinstance(exc, httpx.HTTPStatusError):
-        code = exc.response.status_code
-        return code == 429 or code >= 500
+        return is_transient_status_code(exc.response.status_code)
     return isinstance(exc, (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError))
 
 

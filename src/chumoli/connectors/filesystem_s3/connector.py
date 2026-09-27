@@ -95,15 +95,31 @@ MANIFEST = ConnectorManifest(
 )
 
 
+# Fayl faqat ma'lum ma'lumot kengaytmalari bo'yicha aniqlanadi.
+# "oxirgi segmentda nuqta bor" evristikasi `s3://bucket/data.v2` kabi papkani
+# fayl deb hisoblab, o'sha papkadan hech narsa o'qilmasligiga olib kelardi.
+_FILE_SUFFIXES = (
+    ".csv",
+    ".tsv",
+    ".parquet",
+    ".jsonl",
+    ".ndjson",
+    ".json",
+    ".txt",
+    ".gz",
+    ".zip",
+)
+
+
 def _split_file_url(raw: str) -> tuple[str, str | None]:
-    """Agar URL oxiri faylga o'xshasa, (parent, filename) qaytaradi."""
+    """Agar URL oxiri ma'lum ma'lumot fayli bo'lsa, (parent, filename) qaytaradi."""
     stripped = raw.rstrip("/")
     if "/" not in stripped:
         return raw, None
     parent, name = stripped.rsplit("/", 1)
-    if "." in name and not name.startswith("."):
-        return parent, name
-    return raw, None
+    if name.startswith(".") or not name.lower().endswith(_FILE_SUFFIXES):
+        return raw, None
+    return parent, name
 
 
 def normalize_bucket_url(path_or_url: str) -> tuple[str, str | None]:

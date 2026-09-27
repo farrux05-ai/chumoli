@@ -118,3 +118,22 @@ def test_build_dlt_source_no_network(tmp_path: Path) -> None:
     )
     assert src is not None
     assert getattr(src, "name", None) == "files"
+
+
+def test_normalize_s3_dir_with_dot_is_not_a_file() -> None:
+    """`data.v2` — papka. Ilgari nuqta evristikasi uni fayl deb hisoblardi."""
+    bucket, single = normalize_bucket_url("s3://bucket/data.v2")
+    assert bucket == "s3://bucket/data.v2"
+    assert single is None
+
+
+def test_normalize_s3_extensionless_name_is_not_a_file() -> None:
+    bucket, single = normalize_bucket_url("s3://bucket/report-2026-09")
+    assert bucket == "s3://bucket/report-2026-09"
+    assert single is None
+
+
+def test_normalize_s3_gz_file() -> None:
+    bucket, single = normalize_bucket_url("s3://bucket/prefix/orders.csv.gz")
+    assert bucket == "s3://bucket/prefix"
+    assert single == "orders.csv.gz"

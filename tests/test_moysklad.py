@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from chumoli.connectors import register_builtin_connectors
 from chumoli.connectors.base import registry
 from chumoli.connectors.moysklad.connector import (
     RESOURCE_PATHS,
+    TZ_MOYSKLAD,
+    _attach_href,
     auth_header,
     parse_resources,
     updated_filter,
@@ -64,3 +68,34 @@ def test_build_dlt_source_no_network() -> None:
         {"token": "tok"},
     )
     assert src is not None
+
+
+def test_updated_filter_uses_moskva_time() -> None:
+    """MoySklad sanalarni MSK (UTC+3) da kutadi — Tashkent emas.
+
+    Toshkent va Moskva sanasi faqat kunning ~2 soatida farq qiladi, shuning
+    uchun doimiyni ham bevosita tekshiramiz — aks holda regressiya
+    (Asia/Tashkent) aksariyat paytda ushlanmay qolardi.
+    """
+    assert TZ_MOYSKLAD.key == "Europe/Moscow"
+    days = 5
+    expected = datetime.now(ZoneInfo("Europe/Moscow")).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ) - timedelta(days=days)
+    assert updated_filter(days) == f"updated>={expected.strftime('%Y-%m-%d %H:%M:%S')}"
+
+
+def test_stock_row_key_strips_query_string() -> None:
+    """report/stock/all satri: havola `meta.href` da (query parametrlari bilan)."""
+    href = "https://api.moysklad.ru/api/remap/1.2/entity/product/77e0?expand=supplier"
+    row = _attach_href({"meta": {"href": href}, "stock": 3.0})
+    assert row["_href"] == "https://api.moysklad.ru/api/remap/1.2/entity/product/77e0"
+
+
+def test_row_key_falls_back_to_nested_product() -> None:
+    assert _attach_href({"product": {"id": "abc"}})["_href"] == "abc"
+
+    nested = {"product": {"meta": {"href": "https://ms/entity/product/x?expand=y"}}}
+    assert _attach_href(nested)["_href"] == "https://ms/entity/product/x"
+
+    assert "_href" not in _attach_href({"stock": 1.0})

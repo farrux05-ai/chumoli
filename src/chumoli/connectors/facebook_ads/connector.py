@@ -34,7 +34,7 @@ from chumoli.core.manifest import (
     FieldType,
     SelectOption,
 )
-from chumoli.core.retry_policy import uz_api_retry
+from chumoli.core.retry_policy import is_transient_status_code, uz_api_retry
 
 GRAPH_BASE = "https://graph.facebook.com/v21.0"
 PAGE_SIZE = 100
@@ -145,6 +145,17 @@ def parse_resources(raw: str | None) -> list[str]:
     return [value]
 
 
+def _error_detail(resp: httpx.Response, data: Any) -> str:
+    """Meta xato javobidan o'qiladigan xabar (JSON bo'lmasa — status + body)."""
+    err = data.get("error") if isinstance(data, dict) else None
+    if isinstance(err, dict):
+        return (
+            f"Meta API [{err.get('code', resp.status_code)}]: "
+            f"{err.get('message', resp.text)}"
+        )
+    return f"Meta API [{resp.status_code}]: {(resp.text or '').strip()[:200]}"
+
+
 @uz_api_retry
 def _get_json(
     client: httpx.Client,
@@ -152,15 +163,18 @@ def _get_json(
     params: dict[str, Any],
 ) -> dict[str, Any]:
     resp = client.get(path, params=params)
-    data = resp.json()
+    try:
+        data: Any = resp.json()
+    except ValueError:
+        # HTML/plain-text xato sahifasi (masalan proxy'dan 502) — JSON yo'q
+        data = None
     if not resp.is_success:
-        err = data.get("error") if isinstance(data, dict) else None
-        if isinstance(err, dict):
-            raise ValueError(
-                f"Meta API [{err.get('code', resp.status_code)}]: "
-                f"{err.get('message', resp.text)}"
-            )
-        resp.raise_for_status()
+        message = _error_detail(resp, data)
+        if is_transient_status_code(resp.status_code):
+            # 429/5xx → HTTPStatusError: `uz_api_retry` qayta urinadi.
+            # ValueError ko'tarilsa tenacity uni transient deb hisoblamaydi.
+            raise httpx.HTTPStatusError(message, request=resp.request, response=resp)
+        raise ValueError(message)
     if not isinstance(data, dict):
         raise ValueError("Meta API kutilmagan javob (object emas)")
     return data
@@ -177,6 +191,7 @@ def _paginate(
         "fields": fields,
         "limit": PAGE_SIZE,
     }
+    previous_after: str | None = None
     while True:
         data = _get_json(client, path, params)
         rows = data.get("data")
@@ -188,8 +203,10 @@ def _paginate(
         paging = data.get("paging") if isinstance(data.get("paging"), dict) else {}
         cursors = paging.get("cursors") if isinstance(paging.get("cursors"), dict) else {}
         after = cursors.get("after")
-        if not after or not paging.get("next"):
+        # Kursor takrorlansa (yoki umuman bo'lmasa) — cheksiz loop himoyasi
+        if not after or not paging.get("next") or after == previous_after:
             break
+        previous_after = after
         params = {
             "access_token": access_token,
             "fields": fields,
