@@ -127,7 +127,8 @@ def test_uz_connectors_are_beta() -> None:
     from chumoli.connectors.base import registry
 
     register_builtin_connectors()
-    beta_keys = {"click_uz", "payme_uz", "uzum_market", "didox"}
+    # Live-only / no-sandbox connectors stay beta (UZ + global Meta Ads).
+    beta_keys = {"click_uz", "payme_uz", "uzum_market", "didox", "facebook_ads"}
     for m in registry.all_manifests():
         if m.key in beta_keys:
             assert m.maturity.value == "beta", m.key
@@ -138,6 +139,6 @@ def test_uz_connectors_are_beta() -> None:
 def test_uz_connector_source_marks_beta() -> None:
     """Import-free check: source files declare maturity beta."""
     root = Path(__file__).resolve().parents[1] / "src" / "chumoli" / "connectors"
-    for name in ("click_uz", "payme_uz", "uzum_market", "didox"):
+    for name in ("click_uz", "payme_uz", "uzum_market", "didox", "facebook_ads"):
         text = (root / name / "connector.py").read_text(encoding="utf-8")
         assert 'maturity="beta"' in text or "maturity=ConnectorMaturity.BETA" in text, name
