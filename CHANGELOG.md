@@ -21,6 +21,30 @@
   avoids a connect/auth round-trip per check on remote destinations.
 
 ### Fixed
+- **`drop-resource` was a silent no-op for DuckDB:** the dlt CLI ran as a
+  separate process without the destination credentials, so it opened a stray
+  empty `<cwd>/<pipeline>.duckdb`, "dropped" there and reported success while the
+  real table stayed. It now runs in-process on the pipeline built from the
+  stored config (`dlt.pipeline.helpers.pipeline_drop`), like recovery's other
+  actions — the drop hits the real destination and no longer litters the working
+  directory. A drop that matches no table/state is reported as an error, not `ok`.
+- `tests/test_recovery.py` now asserts the dropped table is actually gone from
+  the destination — the old assertion only checked the success message, which is
+  how the no-op above stayed hidden.
+- Meta Ads (`facebook_ads`) now retries 429/5xx: the Meta JSON error was raised
+  as `ValueError`, which the shared retry policy treats as non-transient, so
+  rate limits were never retried (transient statuses are now re-raised as
+  `HTTPStatusError`; JSON-less error pages are handled too)
+- MoySklad `updated>=` filter uses Moscow time (the server's timezone), not
+  Tashkent — the 2-hour offset could skip records at the filter boundary
+- MoySklad `stock` merge key is derived from `meta.href` with the query string
+  stripped (stable across `?expand=...`), falling back to the nested product id
+- Pagination no longer risks an infinite loop when the API cursor does not
+  advance (Bitrix24 `next: 0`, Meta Ads repeated `after`)
+- Filesystem / S3: a dotted directory (`s3://bucket/data.v2`) is no longer
+  mistaken for a single file and silently read as empty
+- `.gitignore`: `.uzpipe/` is ignored again — the inline comment on that line
+  prevented the rule from matching
 - `drop-resource` recovery was completely broken: the dlt CLI was invoked with
   `--pipelines-dir` *after* the subcommand (rejected as "unrecognized arguments")
   and without `-y` (could hang on the interactive confirmation). Now uses

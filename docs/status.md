@@ -2,7 +2,33 @@
 
 **Verified:** 2026-09-27
 
-## Latest (V1 source connectors)
+## Latest (V1 connector fixes)
+
+- **`facebook_ads` retry was dead:** Meta 429/5xx arrive as JSON, were raised as
+  `ValueError`, and `is_transient_http` does not retry those — rate limits were
+  never re-attempted. Transient statuses are now re-raised as `HTTPStatusError`
+  via the shared `is_transient_status_code` (`core/retry_policy.py`).
+- **`moysklad` filter timezone:** `updated>=` boundary now uses `Europe/Moscow`
+  (MoySklad server time). Tashkent (+5) shifted the window 2h forward, so
+  records changed inside that window could be skipped by incremental merges.
+- **`moysklad` stock key:** `_href` is derived from `meta.href` with the query
+  string stripped (stable across `?expand=...`), with nested
+  `product.id` / `product.meta.href` fallback.
+- **`drop-resource` was a silent no-op (duckdb):** the dlt CLI ran in a
+  subprocess with no destination credentials, so it created a stray empty
+  `<cwd>/<pipeline>.duckdb`, dropped there and returned success — the real table
+  stayed. It now uses dlt's `pipeline_drop` helper **in-process** on the pipeline
+  built from the stored config (same as `sync` / `drop-pending`), so the drop hits
+  the real destination and leaves no files in the working directory. A drop that
+  matches no table/state is now an error, not `ok`.
+- **Pagination guards:** `bitrix24` (`next: 0` / non-advancing `next`) and
+  `facebook_ads` (repeated `after` cursor) could loop forever; both break out.
+- **`filesystem_s3` file detection:** the last bucket-path segment counts as a
+  file only for known data extensions — `s3://bucket/data.v2` stays a prefix.
+- **`.gitignore`:** `.uzpipe/` was never actually ignored (inline `#` comment on
+  the pattern line); the comment now sits on its own line.
+
+## Prior (V1 source connectors)
 
 - **`filesystem_s3`** — dlt `readers` thin wrap (local + `s3://` / `gs://` / `az://`).
   CSV via DuckDB reader (pandas yo‘q), Parquet, JSONL. Lokal e2e: JSONL → DuckDB.
@@ -32,6 +58,8 @@
 - **`drop-resource` was completely broken** — the dlt CLI got `--pipelines-dir`
   after the subcommand (rejected) and no `-y` (could hang). Fixed to
   `dlt -y pipeline --pipelines-dir <dir> <name> drop <resource>`.
+  *(Superseded: that CLI call could not see the destination credentials — see
+  Latest. The drop is now performed in-process.)*
 - Recovery (`sync` / `drop-pending` / `drop-resource`) is **blocked while the pipeline
   is running** — wiping pending dirs or dropping a table mid-load corrupts dlt state.
 - Recovery error messages are **redacted** (`sanitize_error`) — no connection-string

@@ -31,7 +31,8 @@ chumoli_control.db
 chumoli_control.db-*
 master.key
 .chumoli/
-.uzpipe/  # legacy home
+# legacy home
+.uzpipe/
 
 # Editor
 .vscode/
