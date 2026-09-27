@@ -135,7 +135,7 @@ uzum_bank          ← skeleton (hali yo'q)
 [x] tests/test_e2e_<key>_to_duckdb.py          (real/sandbox load)
 [x] docs/skills/write-connector.md qoidalariga mos
 [x] maturity: stable (Tayyor) yoki beta (experimental)
-[ ] pytest tests/ -q — yashil
+[x] pytest tests/ -q — yashil (0.1.1: 231 passed)
 ```
 
 ---

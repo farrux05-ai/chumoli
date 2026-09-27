@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 — 2026-09-27
 
 ### Added
 - Source connectors: **Filesystem / S3** (`filesystem_s3`, dlt `readers`),
