@@ -11,6 +11,9 @@
   retaildemand, stock. `Accept-Encoding: gzip` (rasmiy 415 himoyasi).
 - **`bitrix24`** — inbound webhook yoki portal + OAuth. `crm.deal.list`,
   `crm.lead.list`, `crm.contact.list`, `tasks.task.list`. Pagination `start`/`next`.
+- **`facebook_ads`** — Meta Marketing API (campaigns / adsets / ads). Beta:
+  sandbox yo‘q, real `access_token` + `account_id` kerak. dlt Community source
+  bilan mos.
 
 ## Prior (ClickHouse / load performance)
 
