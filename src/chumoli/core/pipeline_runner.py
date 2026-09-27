@@ -1069,12 +1069,14 @@ def get_preview_rows(
 def drop_resource(name: str, resource: str, store: ControlStore | None = None) -> dict[str, str]:
     """Selectively reset one resource (table + state).
 
-    NOTE: ``pipeline.drop()`` in dlt deletes the *entire* local pipeline
-    working dir — it does NOT take a resource name. Selective drop is done
-    via the supported CLI: ``dlt pipeline <name> drop <resource>``.
+    dlt'ning ``pipeline_drop`` yordamchisi joriy pipeline obyektida chaqiriladi
+    (dlt CLI ham aynan shuni ishlatadi). Ilgari bu yerda CLI alohida subprocess
+    sifatida chaqirilardi va u destination credentiallarini ko'rmasdi — ular
+    faqat cwd'dagi run papkasi yoki env orqali topiladi. Natijada duckdb uchun
+    ``<cwd>/<pipeline>.duckdb`` bo'sh fayli yaratilib, drop "muvaffaqiyatli"
+    qaytarilardi, haqiqiy jadval esa o'chmasdan qolardi.
     """
-    import subprocess
-    import sys
+    from dlt.pipeline.helpers import pipeline_drop
 
     _, stored = _load_stored(name, store)
     res = (resource or "").strip()
@@ -1085,38 +1087,19 @@ def drop_resource(name: str, resource: str, store: ControlStore | None = None) -
         return blocked
     pipeline = build_dlt_pipeline(stored.config)
     try:
-        # NOTE: `--pipelines-dir` is an option of the `pipeline` subcommand and
-        # MUST come before the pipeline name; `-y` is a global flag that skips
-        # the interactive "About to drop…" confirmation (otherwise the server
-        # would hang waiting on stdin).
-        cmd = [
-            sys.executable,
-            "-m",
-            "dlt",
-            "-y",
-            "pipeline",
-            "--pipelines-dir",
-            str(pipeline.pipelines_dir),
-            name,
-            "drop",
-            res,
-        ]
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=60,
-            stdin=subprocess.DEVNULL,
-        )
-        if result.returncode != 0:
-            err = (result.stderr or result.stdout or "").strip()[:400]
-            msg = err or "noma'lum"
-            log.warning("recover_drop_resource_failed", pipeline=name, resource=res)
-            return {"status": "error", "detail": sanitize_error(f"Drop xatosi: {msg}")}
-        log.info("recover_drop_resource", pipeline=name, resource=res)
-        return {"status": "ok", "detail": f"Resource o'chirildi: {res}"}
-    except subprocess.TimeoutExpired:
-        return {"status": "error", "detail": "Drop timeout (60s)"}
+        drop = pipeline_drop(pipeline, resources=(res,))
+    except Exception as e:
+        log.warning("recover_drop_resource_failed", pipeline=name, resource=res)
+        return {"status": "error", "detail": sanitize_error(f"Drop xatosi: {e}")}
+    if drop.is_empty:
+        return {
+            "status": "error",
+            "detail": f"O'chiriladigan jadval yoki state topilmadi: {res}",
+        }
+    try:
+        drop()
     except Exception as e:
         log.exception("recover_drop_resource_failed", pipeline=name, resource=res)
         return {"status": "error", "detail": sanitize_error(f"Drop xatosi: {e}")}
+    log.info("recover_drop_resource", pipeline=name, resource=res)
+    return {"status": "ok", "detail": f"Resource o'chirildi: {res}"}

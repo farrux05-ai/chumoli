@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import dlt
+import duckdb
 import pytest
 
 from chumoli.connectors import register_builtin_connectors
@@ -196,20 +197,16 @@ def test_drop_resource_error_is_sanitized(tmp_path, monkeypatch) -> None:
     store = ControlStore(db_path=tmp_path / "c.db", cipher=cipher)
     _save_simple(store, "rec_drop", tmp_path)
 
-    import subprocess as sp
+    from importlib import import_module
 
     import chumoli.core.pipeline_runner as pr
 
-    class _FakePipeline:
-        pipelines_dir = str(tmp_path)
+    dlt_helpers = import_module("dlt.pipeline.helpers")
 
-    class _Result:
-        returncode = 1
-        stderr = "drop failed: postgresql://u:pw@h/db"
-        stdout = ""
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("connection failed: postgresql://u:pw@h/db")
 
-    monkeypatch.setattr(pr, "build_dlt_pipeline", lambda _cfg: _FakePipeline())
-    monkeypatch.setattr(sp, "run", lambda *_a, **_k: _Result())
+    monkeypatch.setattr(dlt_helpers, "pipeline_drop", _boom)
 
     out = pr.drop_resource("rec_drop", "items", store=store)
     assert out["status"] == "error"
@@ -250,3 +247,17 @@ def test_drop_resource_actually_drops(tmp_path) -> None:
     out = pr.drop_resource("rec_drop_real", "events", store=store)
     assert out["status"] == "ok", out
     assert "events" in out["detail"]
+
+    # Regression: drop haqiqatan bajarilishi kerak. Ilgari dlt CLI alohida
+    # subprocess'da chaqirilib, destination credentiallarini ko'rmasdi — cwd'da
+    # bo'sh `<nom>.duckdb` ochib "muvaffaqiyatli" drop qilardi, haqiqiy jadval
+    # esa o'chmay qolardi.
+    con = duckdb.connect(str(tmp_path / "rec_drop_real.duckdb"))
+    tables = {
+        t[0]
+        for t in con.execute(
+            "select table_name from information_schema.tables where table_schema = 'd'"
+        ).fetchall()
+    }
+    con.close()
+    assert "events" not in tables, tables
