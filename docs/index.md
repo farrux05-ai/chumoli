@@ -30,6 +30,7 @@
 ## Strategy & history
 
 - [Connector strategy](strategy/chumoli-connector-strategy.md)
+- [Connector decisions v1](strategy/connector-decisions-v1.md)
 - [API maintenance (proposal)](strategy/chumoli-api-maintenance.md)
 - [dlt boundary skill](strategy/chumoli-dlt-boundary-SKILL.md)
 - [Original positioning (historical)](original-positioning/POSITIONING.md)

@@ -136,9 +136,45 @@ def test_uz_connectors_are_beta() -> None:
             assert m.maturity.value == "stable", m.key
 
 
+def test_production_connectors_are_stable() -> None:
+    """0.1.2 dan prod: SQL, REST, Filesystem/S3, synthetic, Bitrix24, MoySklad.
+
+    Bu ro'yxat atayin shu yerda — releasdan keyin connector "Tayyor"
+    degan da'vo test bilan qulflanadi, nafaqat hujjat bilan.
+    """
+    pytest.importorskip("dlt")
+    from chumoli.connectors import register_builtin_connectors
+    from chumoli.connectors.base import registry
+
+    register_builtin_connectors()
+    stable_keys = {
+        "rest_api",
+        "sql_database",
+        "postgresql",
+        "mysql",
+        "filesystem_s3",
+        "synthetic_volume",
+        "bitrix24",
+        "moysklad",
+    }
+    for m in registry.all_manifests():
+        if m.key in stable_keys:
+            assert m.maturity.value == "stable", m.key
+
+
 def test_uz_connector_source_marks_beta() -> None:
     """Import-free check: source files declare maturity beta."""
     root = Path(__file__).resolve().parents[1] / "src" / "chumoli" / "connectors"
     for name in ("click_uz", "payme_uz", "uzum_market", "didox", "facebook_ads"):
         text = (root / name / "connector.py").read_text(encoding="utf-8")
         assert 'maturity="beta"' in text or "maturity=ConnectorMaturity.BETA" in text, name
+
+
+def test_production_connector_source_marks_stable() -> None:
+    """Import-free check: Bitrix24 va MoySklad manbasida stable aniq yozilgan."""
+    root = Path(__file__).resolve().parents[1] / "src" / "chumoli" / "connectors"
+    for name in ("bitrix24", "moysklad"):
+        text = (root / name / "connector.py").read_text(encoding="utf-8")
+        assert (
+            'maturity="stable"' in text or "maturity=ConnectorMaturity.STABLE" in text
+        ), name

@@ -1,6 +1,18 @@
 # Status
 
-**Verified:** 2026-09-27
+**Verified:** 2026-09-29
+
+## 0.1.2 — prod tayyor
+
+- **Prod deb e’lon qilindi:** `rest_api`, `sql_database` / `postgresql` / `mysql`,
+  `filesystem_s3`, `synthetic_volume` va endi **`bitrix24`** hamda **`moysklad`**
+  — `maturity: stable` (ikkitasida manbada aniq yozilgan). Beta bo‘lib qoladi:
+  `click_uz`, `payme_uz`, `uzum_market`, `didox`, `facebook_ads`.
+  `tests/test_manifest.py::test_production_connectors_are_stable` shu ro‘yxatni
+  qulflaydi.
+- PyPI classifier `Development Status :: 5 - Production/Stable`; README badge yangilandi.
+- Versiya yagona manbadan: `src/chumoli/__init__.py` = `0.1.2`.
+- Testlar: **236 passed** (0.1.1: 231).
 
 ## Latest (V1 connector fixes)
 

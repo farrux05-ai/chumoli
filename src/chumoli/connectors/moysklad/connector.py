@@ -67,6 +67,7 @@ MANIFEST = ConnectorManifest(
     key="moysklad",
     label="MoySklad",
     category=ConnectorCategory.UZ_ERP,
+    maturity="stable",
     description="MoySklad JSON API 1.2 — buyurtma, jo'natma, mahsulot, qoldiq",
     dlt_source_factory="chumoli.connectors.moysklad.connector.MoySkladConnector",
     fields=[

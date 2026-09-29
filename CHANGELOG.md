@@ -1,8 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.1.2 — 2026-09-29
+
+**Production-ready:** SQL (`sql_database` / `postgresql` / `mysql`), REST API,
+Filesystem/S3, synthetic volume, **Bitrix24** and **MoySklad**. The UZ connectors
+(`click_uz`, `payme_uz`, `uzum_market`, `didox`) and Meta Ads (`facebook_ads`)
+stay **beta**.
 
 ### Changed
+- **`bitrix24` and `moysklad` declare `maturity: stable`** explicitly — they now
+  ship as production-ready alongside the SQL / REST / Filesystem connectors.
+  Only the UZ payment/gov connectors and Meta Ads remain beta.
+- Project metadata: PyPI classifier is now `Development Status :: 5 - Production/Stable`.
 - **Bitrix24:** true incremental cursor via `dlt.sources.incremental` on
   `DATE_MODIFY` (CRM) / `changedDate` (tasks). `from_days_ago` is only the
   first-run lower bound; later runs continue from the last cursor stored in
@@ -42,10 +51,6 @@
   avoids a connect/auth round-trip per check on remote destinations.
 
 ### Fixed
-- **MoySklad:** set `Accept: application/json;charset=utf-8` (API error 1062
-  when charset missing → HTTP 400). Surface MoySklad error body on HTTP failures.
-- **Bitrix24:** inject `id` from CRM `ID` on yield so dlt incremental
-  does not raise `IncrementalPrimaryKeyMissing` (looks up snake_case `id`).
 - **`drop-resource` was a silent no-op for DuckDB:** the dlt CLI ran as a
   separate process without the destination credentials, so it opened a stray
   empty `<cwd>/<pipeline>.duckdb`, "dropped" there and reported success while the
@@ -94,10 +99,6 @@
 - CI: pytest 3.11/3.12 + Docker smoke
 
 ### Fixed
-- **MoySklad:** set `Accept: application/json;charset=utf-8` (API error 1062
-  when charset missing → HTTP 400). Surface MoySklad error body on HTTP failures.
-- **Bitrix24:** inject `id` from CRM `ID` on yield so dlt incremental
-  does not raise `IncrementalPrimaryKeyMissing` (looks up snake_case `id`).
 - Click connector auth raised `NameError` (`time` not imported) — connector was unusable
 - Filesystem export silently failed: `Path` was undefined in `_execute` and the
   error was swallowed by `except Exception`

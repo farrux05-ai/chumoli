@@ -14,12 +14,12 @@
   <a href="https://pypi.org/project/chumoli/"><img src="https://img.shields.io/pypi/v/chumoli.svg" alt="PyPI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python" />
-  <img src="https://img.shields.io/badge/status-beta-yellow.svg" alt="Beta" />
+  <img src="https://img.shields.io/badge/status-production--stable-green.svg" alt="Production/stable" />
 </p>
 
 ---
 
-SQL, REST, fayl/S3, MoySklad, Bitrix24 va O‘zbekiston manbalaridan (Click, Payme, Uzum, Didox — **beta**) ma’lumotni olib **DuckDB**, **PostgreSQL**, **lokal fayl** yoki **S3** ga yuklang. Brauzerda boshqaring yoki CLI orqali ishga tushiring.
+SQL, REST, fayl/S3, MoySklad va Bitrix24 manbalaridan — **prodga tayyor** — hamda O‘zbekiston manbalaridan (Click, Payme, Uzum, Didox) va Meta Ads’dan (**beta**) ma’lumotni olib **DuckDB**, **PostgreSQL**, **lokal fayl** yoki **S3** ga yuklang. Brauzerda boshqaring yoki CLI orqali ishga tushiring.
 
 ## Tez boshlash
 
@@ -58,16 +58,18 @@ UI dagi demo: SQL → DuckDB, REST (CBU valyuta kurslari) → DuckDB, Volume (si
 
 | Imkoniyat | Izoh |
 |-----------|------|
-| Ulagichlar | SQL, REST, Filesystem/S3, MoySklad, Bitrix24, sintetik volume (**stable**); Click, Payme, Uzum, Didox (**beta**) |
+| Ulagichlar | SQL, REST, Filesystem/S3, MoySklad, Bitrix24, sintetik volume (**stable**); Click, Payme, Uzum, Didox, Meta Ads (**beta**) |
 | Destinationlar | DuckDB, PostgreSQL, lokal CSV/Parquet, S3/GCS/…, ClickHouse |
 | Dashboard | Yaratish, Run, Preview, runs tarixi, scheduler |
 | Xavfsizlik | Secrets Fernet bilan shifrlangan; API kalit |
 | Bildirishnoma | Telegram (ixtiyoriy) |
 | CLI | `chumoli ui`, `list`, `run` |
 
-### UZ connectorlar — beta
+### Beta connectorlar
 
-Click, Payme, Uzum Market va Didox kod bazasida bor va UI da **beta** deb belgilangan. Ular hali barcha merchant/sandbox muhitlarida to‘liq tasdiqlanmagan. Ishlatishdan oldin o‘z API kalitingiz bilan sinang; xato topsangiz [Issues](https://github.com/farrux05-ai/chumoli/issues) oching.
+Click, Payme, Uzum Market, Didox va Meta Ads (Facebook Ads) kod bazasida bor va UI da **beta** deb belgilangan. Ular hali barcha merchant/sandbox muhitlarida to‘liq tasdiqlanmagan. Ishlatishdan oldin o‘z API kalitingiz bilan sinang; xato topsangiz [Issues](https://github.com/farrux05-ai/chumoli/issues) oching.
+
+**Prodga tayyor (stable):** SQL, REST API, Filesystem/S3, sintetik volume, MoySklad va Bitrix24 — UI da ular badge’siz ko‘rinadi.
 
 ## Destinationlar
 

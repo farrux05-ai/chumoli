@@ -72,6 +72,7 @@ MANIFEST = ConnectorManifest(
     key="bitrix24",
     label="Bitrix24",
     category=ConnectorCategory.UZ_ERP,
+    maturity="stable",
     description="Bitrix24 REST — deal, lead, contact, task (webhook yoki OAuth)",
     dlt_source_factory="chumoli.connectors.bitrix24.connector.Bitrix24Connector",
     fields=[

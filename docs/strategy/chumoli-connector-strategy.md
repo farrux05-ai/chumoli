@@ -5,11 +5,13 @@
 **Sana:** 2026-09-18  
 **Bog‘liqlik:** Claude/dashboard migratsiyasidan mustaqil; fundament + bozor + dlt faktlariga asoslangan.
 
-> **Holat (2026-09-27):** reja qisman bajarildi. Kodda mavjud: PostgreSQL/MySQL/
-> REST/SQL, **Filesystem/S3 source**, **MoySklad**, **Bitrix24**, DuckDB/PostgreSQL/
-> Filesystem/S3/ClickHouse destinationlar, Click/Payme/Uzum/Didox (**beta**).
-> Hali yozilmagan: 1C, Soliq, MyGov, Google Analytics/Sheets. Quyidagi jadvaldagi
-> “Phase”/“Qachon” ustunlari — dastlabki reja; haqiqiy holat uchun `docs/status.md`.
+> **Holat (2026-09-29, 0.1.2):** reja qisman bajarildi. **Prod (stable):** SQL
+> (PostgreSQL / MySQL / `sql_database`), REST API, Filesystem/S3, sintetik volume,
+> **MoySklad**, **Bitrix24**. **Beta:** Click / Payme / Uzum / Didox va Meta Ads
+> (`facebook_ads`). Destinationlar: DuckDB / PostgreSQL / Filesystem / S3 /
+> ClickHouse. Hali yozilmagan: 1C, Soliq, MyGov, Google Analytics/Sheets.
+> Quyidagi jadvaldagi “Phase”/“Qachon” ustunlari — dastlabki reja; haqiqiy holat
+> uchun `docs/status.md`.
 
 ---
 

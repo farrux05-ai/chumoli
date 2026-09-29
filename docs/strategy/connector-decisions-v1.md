@@ -1,6 +1,6 @@
 # Chumoli — Connector Decisions v1
 
-**Sana:** 2026-09-27 (yangilandi)  
+**Sana:** 2026-09-29 (yangilandi)  
 **Maqsad:** V1 uchun qaysi connectorlar chiqadi, qaysilari experimental, qaysilari yozilmaydi — va nima uchun.  
 **Asosiy qoida (qat’iy):**  
 Connector **“Tayyor”** deb faqat quyidagi shartlar bajarilganda chiqariladi:
@@ -25,13 +25,17 @@ Faqat to‘liq test qilinadiganlar. Bular V1 release da “Tayyor” holatda bo�
 | `sql_database` | SQL Database | dlt core | ✅ Tayyor |
 | `postgresql` | PostgreSQL | dlt core wrap | ✅ Tayyor |
 | `mysql` | MySQL | dlt core wrap | ✅ Tayyor |
-| `payme_uz` | Payme | Sandbox bor (`checkout.test.paycom.uz`) | ✅ Tayyor (kodda hozircha beta badge) |
 | `synthetic_volume` | Volume demo | Test/demo uchun | ✅ Tayyor |
-| `filesystem_s3` | Filesystem / S3 | Local + S3, credential tashqi emas yoki AWS | ✅ Yozildi (V1) |
-| `moysklad` | MoySklad | Bepul tier = sandbox, REST JSON, CIS + UZ | ✅ Yozildi (V1) |
-| `bitrix24` | Bitrix24 | Webhook/OAuth, o‘zi test account ochish mumkin, UZ da keng | ✅ Yozildi (V1) |
+| `filesystem_s3` | Filesystem / S3 | Local + S3, credential tashqi emas yoki AWS | ✅ Prod (0.1.2) |
+| `moysklad` | MoySklad | Bepul tier = sandbox, REST JSON, CIS + UZ | ✅ Prod (0.1.2) |
+| `bitrix24` | Bitrix24 | Webhook/OAuth, o‘zi test account ochish mumkin, UZ da keng | ✅ Prod (0.1.2) |
 
-**Jami V1 Tayyor:** 9 ta
+**Jami V1 Tayyor:** 8 ta
+
+> **0.1.2 holati:** kodda `maturity: stable` — `rest_api`, `sql_database`,
+> `postgresql`, `mysql`, `filesystem_s3`, `synthetic_volume`, `bitrix24`,
+> `moysklad`. Prod deb faqat shular e’lon qilinadi; fayldagi qolgan yozuvlar
+> dastlabki reja.
 
 ---
 
@@ -45,6 +49,7 @@ UI da ochiq yoziladi: “Sandbox yo‘q — o‘zing credential berib sinab ko�
 | `click_uz` | Click | Sandbox yo‘q, live only | Experimental (mavjud kod saqlanadi) |
 | `uzum_market` | Uzum Market / Seller | Credential-gated, live only | Experimental (mavjud kod saqlanadi) |
 | `didox` | Didox | Sandbox yo‘q | Experimental (mavjud kod saqlanadi) |
+| `payme_uz` | Payme | Sandbox bor, lekin e2e hali tasdiqlanmagan | Beta (kod bor) |
 | `facebook_ads` | Meta Ads (Facebook) | dlt Community source, sandbox yo‘q, real token kerak | Experimental (yozildi) |
 | `uzum_bank` | Uzum Bank | Self-service sandbox yo‘q, account manager kerak | Skeleton + experimental — **hali yozilmagan** |
 
@@ -77,21 +82,21 @@ UI da ochiq yoziladi: “Sandbox yo‘q — o‘zing credential berib sinab ko�
 ## V1 Final ro‘yxat (chiqariladigan)
 
 ```
-Tayyor (9):
+Tayyor (8):
 ─────────────────────────────
 rest_api
 sql_database
 postgresql
 mysql
-payme_uz
 synthetic_volume
-filesystem_s3      ← yozildi
-moysklad           ← yozildi
-bitrix24           ← yozildi
+filesystem_s3      ← prod (0.1.2)
+moysklad           ← prod (0.1.2)
+bitrix24           ← prod (0.1.2)
 
-Experimental (5):
+Experimental (6):
 ─────────────────────────────
 click_uz
+payme_uz
 uzum_market
 didox
 facebook_ads       ← yozildi (Meta Marketing API, beta)
@@ -135,7 +140,7 @@ uzum_bank          ← skeleton (hali yo'q)
 [x] tests/test_e2e_<key>_to_duckdb.py          (real/sandbox load)
 [x] docs/skills/write-connector.md qoidalariga mos
 [x] maturity: stable (Tayyor) yoki beta (experimental)
-[x] pytest tests/ -q — yashil (0.1.1: 231 passed)
+[x] pytest tests/ -q — yashil (0.1.2: 236 passed)
 ```
 
 ---
@@ -143,6 +148,7 @@ uzum_bank          ← skeleton (hali yo'q)
 ## Qarorlar asosi (qisqa)
 
 - **Sandbox / bepul / local bor** → Tayyor
+- **Istisno:** Payme’da sandbox bor, ammo e2e tasdiqlanmagani uchun 0.1.2 da beta qoldirildi
 - **Faqat live credential** → Experimental (kod bor, kafolat yo‘q)
 - **API yo‘q yoki yopiq** → Yozilmaydi
 - **Global dlt source** → Faqat UZ moat bo‘lsa wrap, aks holda yo‘naltirish
