@@ -93,62 +93,51 @@ def test_build_dlt_source_no_network() -> None:
     assert src is not None
 
 
-def test_resource_columns_cover_null_warning_fields() -> None:
-    """Real Bitrix loadda null kelgan maydonlar ham columns hintida bo'lishi kerak."""
+def test_resource_columns_use_raw_api_keys() -> None:
+    """Hint kalitlari Bitrix JSON asl nomlari — snake_case emas (collision oldini olish)."""
     assert set(RESOURCE_COLUMNS) == set(RESOURCES)
-    # deals — live logdagi null ustunlar
     deals = RESOURCE_COLUMNS["deals"]
     for col in (
-        "additional_info",
-        "last_communication_time",
-        "location_id",
-        "origin_id",
-        "originator_id",
-        "probability",
-        "quote_id",
-        "repeat_sale_segment_id",
-        "source_description",
-        "utm_campaign",
-        "utm_content",
-        "utm_medium",
-        "utm_source",
-        "utm_term",
+        "ADDITIONAL_INFO",
+        "LAST_COMMUNICATION_TIME",
+        "LOCATION_ID",
+        "ORIGIN_ID",
+        "ORIGINATOR_ID",
+        "PROBABILITY",
+        "QUOTE_ID",
+        "REPEAT_SALE_SEGMENT_ID",
+        "SOURCE_DESCRIPTION",
+        "UTM_CAMPAIGN",
+        "UTM_SOURCE",
     ):
         assert col in deals, col
-    # contacts
+    assert deals["ID"].get("nullable") is False
+
     contacts = RESOURCE_COLUMNS["contacts"]
-    for col in (
-        "address",
-        "address_city",
-        "honorific",
-        "photo",
-        "post",
-        "second_name",
-        "utm_source",
-    ):
+    for col in ("ADDRESS", "ADDRESS_CITY", "HONORIFIC", "PHOTO", "POST", "SECOND_NAME"):
         assert col in contacts, col
-    # leads
+
     leads = RESOURCE_COLUMNS["leads"]
-    for col in ("company_id", "company_title", "status_description", "address"):
+    for col in ("COMPANY_ID", "COMPANY_TITLE", "STATUS_DESCRIPTION", "ADDRESS"):
         assert col in leads, col
-    # tasks — nested flatten + null plan fields
+
+    # tasks.task.list — camelCase; nested responsible/creator hint yo'q
     tasks = RESOURCE_COLUMNS["tasks"]
     for col in (
-        "backlog_id",
-        "closed_by",
-        "closed_date",
-        "parent_id",
-        "flow_id",
-        "sprint_id",
-        "time_spent_in_logs",
-        "creator__work_position",
-        "responsible__work_position",
+        "backlogId",
+        "closedBy",
+        "closedDate",
+        "parentId",
+        "flowId",
+        "sprintId",
+        "timeSpentInLogs",
+        "viewedDate",
+        "durationFact",
     ):
         assert col in tasks, col
-    # PK tipiga ega
-    for name, cols in RESOURCE_COLUMNS.items():
-        assert "id" in cols
-        assert cols["id"].get("nullable") is False
+    assert "responsible__work_position" not in tasks
+    assert "creator__work_position" not in tasks
+    assert tasks["id"].get("nullable") is False
 
 
 def test_portal_without_oauth_raises() -> None:

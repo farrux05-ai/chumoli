@@ -4,9 +4,10 @@
 
 ### Fixed
 - **Bitrix24** resource columns: explicit dlt `columns` hints for deals/leads/
-  contacts/tasks so null API fields still materialize in the destination and
-  the `verify_normalized_table` type-inference WARNINGs stop firing on real
-  portal data (address/UTM/probability/parent_id and related fields).
+  contacts/tasks so null API fields still materialize. Hint keys use raw API
+  names (CRM UPPERCASE, tasks camelCase) — previous snake_case hints collided
+  with dlt normalization (`responsible__work_position`, `viewed_date`, …) and
+  flooded the log. Nested creator/responsible objects are left to dlt flatten.
 
 ## 0.1.1 — 2026-09-27
 
