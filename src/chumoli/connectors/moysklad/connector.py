@@ -181,7 +181,22 @@ def _get_json(
     params: dict[str, Any],
 ) -> dict[str, Any]:
     resp = client.get(path, params=params)
-    resp.raise_for_status()
+    if resp.is_error:
+        # MoySklad 400/415 da foydali matn body da — httpx xabari yolg'iz status emas
+        detail = ""
+        try:
+            body = resp.json()
+            errs = body.get("errors") if isinstance(body, dict) else None
+            if isinstance(errs, list) and errs:
+                e0 = errs[0] if isinstance(errs[0], dict) else {}
+                detail = f" [{e0.get('code', '?')}] {e0.get('error') or e0.get('error_message') or ''}"
+        except Exception:
+            detail = f" body={resp.text[:200]!r}"
+        raise httpx.HTTPStatusError(
+            f"MoySklad HTTP {resp.status_code}{detail} url={resp.request.url}",
+            request=resp.request,
+            response=resp,
+        )
     data = resp.json()
     if isinstance(data, list) and data and isinstance(data[0], dict) and data[0].get("error"):
         err = data[0]
@@ -223,13 +238,14 @@ def _paginate(
 
 
 def _client(base_url: str, token: str) -> httpx.Client:
-    # Accept-Encoding FAQAT gzip — deflate/br 415 qaytaradi (rasmiy cheklov).
+    # Accept: faqat application/json;charset=utf-8 (boshqasi → 400, error 1062).
+    # Accept-Encoding: faqat gzip (deflate/br → 415).
     return httpx.Client(
         base_url=base_url.rstrip("/") + "/",
         headers={
             "Authorization": auth_header(token),
             "Accept-Encoding": "gzip",
-            "Accept": "application/json",
+            "Accept": "application/json;charset=utf-8",
             "User-Agent": f"Chumoli/{__version__} (+https://github.com/farrux05-ai/chumoli)",
         },
         timeout=60.0,

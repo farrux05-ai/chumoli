@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from chumoli.connectors import register_builtin_connectors
 from chumoli.connectors.base import registry
 from chumoli.connectors.moysklad.connector import (
+    _client,
     RESOURCE_PATHS,
     TZ_MOYSKLAD,
     _attach_href,
@@ -99,3 +100,10 @@ def test_row_key_falls_back_to_nested_product() -> None:
     assert _attach_href(nested)["_href"] == "https://ms/entity/product/x"
 
     assert "_href" not in _attach_href({"stock": 1.0})
+
+
+def test_client_accept_charset() -> None:
+    """MoySklad requires Accept application/json;charset=utf-8 (error 1062)."""
+    with _client("https://api.moysklad.ru/api/remap/1.2", "tok") as c:
+        assert c.headers["Accept"] == "application/json;charset=utf-8"
+        assert c.headers["Accept-Encoding"] == "gzip"

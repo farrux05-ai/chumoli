@@ -9,6 +9,8 @@
   pipeline state. Still `merge` on ID.
 
 ### Fixed
+- **MoySklad:** set `Accept: application/json;charset=utf-8` (API error 1062
+  when charset missing → HTTP 400). Surface MoySklad error body on HTTP failures.
 - **Bitrix24:** inject `id` from CRM `ID` on yield so dlt incremental
   does not raise `IncrementalPrimaryKeyMissing` (looks up snake_case `id`).
 - **Bitrix24:** drop experimental `columns` hints. They collided with dlt's
@@ -40,6 +42,8 @@
   avoids a connect/auth round-trip per check on remote destinations.
 
 ### Fixed
+- **MoySklad:** set `Accept: application/json;charset=utf-8` (API error 1062
+  when charset missing → HTTP 400). Surface MoySklad error body on HTTP failures.
 - **Bitrix24:** inject `id` from CRM `ID` on yield so dlt incremental
   does not raise `IncrementalPrimaryKeyMissing` (looks up snake_case `id`).
 - **`drop-resource` was a silent no-op for DuckDB:** the dlt CLI ran as a
@@ -90,6 +94,8 @@
 - CI: pytest 3.11/3.12 + Docker smoke
 
 ### Fixed
+- **MoySklad:** set `Accept: application/json;charset=utf-8` (API error 1062
+  when charset missing → HTTP 400). Surface MoySklad error body on HTTP failures.
 - **Bitrix24:** inject `id` from CRM `ID` on yield so dlt incremental
   does not raise `IncrementalPrimaryKeyMissing` (looks up snake_case `id`).
 - Click connector auth raised `NameError` (`time` not imported) — connector was unusable
