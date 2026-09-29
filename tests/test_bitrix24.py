@@ -11,6 +11,8 @@ from chumoli.connectors import register_builtin_connectors
 from chumoli.connectors.base import registry
 from chumoli.connectors.bitrix24.connector import (
     BITRIX_PAGE_SIZE,
+    RESOURCE_COLUMNS,
+    RESOURCES,
     _paginate,
     extract_items,
     is_webhook_url,
@@ -89,6 +91,64 @@ def test_build_dlt_source_no_network() -> None:
         {"webhook_url": "https://shop.bitrix24.uz/rest/1/xxxxx/"},
     )
     assert src is not None
+
+
+def test_resource_columns_cover_null_warning_fields() -> None:
+    """Real Bitrix loadda null kelgan maydonlar ham columns hintida bo'lishi kerak."""
+    assert set(RESOURCE_COLUMNS) == set(RESOURCES)
+    # deals — live logdagi null ustunlar
+    deals = RESOURCE_COLUMNS["deals"]
+    for col in (
+        "additional_info",
+        "last_communication_time",
+        "location_id",
+        "origin_id",
+        "originator_id",
+        "probability",
+        "quote_id",
+        "repeat_sale_segment_id",
+        "source_description",
+        "utm_campaign",
+        "utm_content",
+        "utm_medium",
+        "utm_source",
+        "utm_term",
+    ):
+        assert col in deals, col
+    # contacts
+    contacts = RESOURCE_COLUMNS["contacts"]
+    for col in (
+        "address",
+        "address_city",
+        "honorific",
+        "photo",
+        "post",
+        "second_name",
+        "utm_source",
+    ):
+        assert col in contacts, col
+    # leads
+    leads = RESOURCE_COLUMNS["leads"]
+    for col in ("company_id", "company_title", "status_description", "address"):
+        assert col in leads, col
+    # tasks — nested flatten + null plan fields
+    tasks = RESOURCE_COLUMNS["tasks"]
+    for col in (
+        "backlog_id",
+        "closed_by",
+        "closed_date",
+        "parent_id",
+        "flow_id",
+        "sprint_id",
+        "time_spent_in_logs",
+        "creator__work_position",
+        "responsible__work_position",
+    ):
+        assert col in tasks, col
+    # PK tipiga ega
+    for name, cols in RESOURCE_COLUMNS.items():
+        assert "id" in cols
+        assert cols["id"].get("nullable") is False
 
 
 def test_portal_without_oauth_raises() -> None:

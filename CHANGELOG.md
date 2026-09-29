@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Bitrix24** resource columns: explicit dlt `columns` hints for deals/leads/
+  contacts/tasks so null API fields still materialize in the destination and
+  the `verify_normalized_table` type-inference WARNINGs stop firing on real
+  portal data (address/UTM/probability/parent_id and related fields).
+
 ## 0.1.1 — 2026-09-27
 
 ### Added
