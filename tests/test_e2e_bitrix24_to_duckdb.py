@@ -17,8 +17,20 @@ from chumoli.security.crypto import CredentialCipher
 from chumoli.store.control_store import ControlStore
 
 _DEALS = [
-    {"ID": "101", "TITLE": "Deal A", "STAGE_ID": "NEW", "OPPORTUNITY": "1000"},
-    {"ID": "102", "TITLE": "Deal B", "STAGE_ID": "WON", "OPPORTUNITY": "2500"},
+    {
+        "ID": "101",
+        "TITLE": "Deal A",
+        "STAGE_ID": "NEW",
+        "OPPORTUNITY": "1000",
+        "DATE_MODIFY": "2026-09-28T10:00:00+05:00",
+    },
+    {
+        "ID": "102",
+        "TITLE": "Deal B",
+        "STAGE_ID": "WON",
+        "OPPORTUNITY": "2500",
+        "DATE_MODIFY": "2026-09-28T12:00:00+05:00",
+    },
 ]
 
 

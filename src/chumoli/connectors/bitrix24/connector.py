@@ -42,7 +42,7 @@ from chumoli.core.retry_policy import uz_api_retry
 BITRIX_PAGE_SIZE = 50
 TZ_TASHKENT = ZoneInfo("Asia/Tashkent")
 
-# method, result extractor key (None = result is a list), date filter field
+# method, result extractor key (None = result is a list), API filter date field
 RESOURCES: dict[str, tuple[str, str | None, str]] = {
     "deals": ("crm.deal.list", None, "DATE_MODIFY"),
     "leads": ("crm.lead.list", None, "DATE_MODIFY"),
@@ -55,6 +55,15 @@ RESOURCE_PRIMARY_KEY: dict[str, str] = {
     "leads": "ID",
     "contacts": "ID",
     "tasks": "id",
+}
+
+# Cursor path = JSON response dagi maydon (filter maydonidan farq qilishi mumkin:
+# tasks filter CHANGED_DATE, response esa changedDate).
+RESOURCE_CURSOR_FIELD: dict[str, str] = {
+    "deals": "DATE_MODIFY",
+    "leads": "DATE_MODIFY",
+    "contacts": "DATE_MODIFY",
+    "tasks": "changedDate",
 }
 
 MANIFEST = ConnectorManifest(
@@ -104,6 +113,10 @@ MANIFEST = ConnectorManifest(
             type=FieldType.NUMBER,
             required=False,
             default="7",
+            help_text=(
+                "Faqat birinchi run (yoki state tozalanganda) uchun pastki chegarа. "
+                "Keyingi runlar oxirgi DATE_MODIFY / changedDate cursoridan davom etadi."
+            ),
         ),
     ],
 )
@@ -228,11 +241,21 @@ def _make_resource(
 ):
     pk = RESOURCE_PRIMARY_KEY[name]
     url = method_url(base, method)
+    cursor_field = RESOURCE_CURSOR_FIELD[name]
 
     @dlt.resource(name=name, write_disposition="merge", primary_key=pk)
-    def _resource() -> Iterator[dict[str, Any]]:
+    def _resource(
+        modified: dlt.sources.incremental[str] = dlt.sources.incremental(
+            cursor_field,
+            initial_value=since,
+            last_value_func=max,
+            # Ba'zi yozuvlarda cursor null bo'lishi mumkin — drop qilmaslik
+            on_cursor_value_missing="include",
+        ),
+    ) -> Iterator[dict[str, Any]]:
+        # start_value: birinchi run = since (from_days_ago); keyin = oxirgi cursor
         body: dict[str, Any] = {
-            "filter": {f">={date_field}": since},
+            "filter": {f">={date_field}": modified.start_value},
             "order": {date_field: "ASC"},
         }
         if oauth_token:

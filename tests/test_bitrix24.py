@@ -11,6 +11,8 @@ from chumoli.connectors import register_builtin_connectors
 from chumoli.connectors.base import registry
 from chumoli.connectors.bitrix24.connector import (
     BITRIX_PAGE_SIZE,
+    RESOURCE_CURSOR_FIELD,
+    RESOURCES,
     _paginate,
     extract_items,
     is_webhook_url,
@@ -90,6 +92,13 @@ def test_build_dlt_source_no_network() -> None:
     )
     assert src is not None
 
+
+def test_cursor_fields_match_api_json() -> None:
+    """Cursor path = response JSON key; filter field alohida (tasks)."""
+    assert set(RESOURCE_CURSOR_FIELD) == set(RESOURCES)
+    assert RESOURCE_CURSOR_FIELD["deals"] == "DATE_MODIFY"
+    assert RESOURCE_CURSOR_FIELD["tasks"] == "changedDate"
+    assert RESOURCES["tasks"][2] == "CHANGED_DATE"
 
 
 def test_portal_without_oauth_raises() -> None:

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed
+- **Bitrix24:** true incremental cursor via `dlt.sources.incremental` on
+  `DATE_MODIFY` (CRM) / `changedDate` (tasks). `from_days_ago` is only the
+  first-run lower bound; later runs continue from the last cursor stored in
+  pipeline state. Still `merge` on ID.
+
 ### Fixed
 - **Bitrix24:** drop experimental `columns` hints. They collided with dlt's
   snake_case normalization against an already-evolved pipeline schema
