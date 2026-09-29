@@ -3,11 +3,11 @@
 ## Unreleased
 
 ### Fixed
-- **Bitrix24** resource columns: explicit dlt `columns` hints for deals/leads/
-  contacts/tasks so null API fields still materialize. Hint keys use raw API
-  names (CRM UPPERCASE, tasks camelCase) — previous snake_case hints collided
-  with dlt normalization (`responsible__work_position`, `viewed_date`, …) and
-  flooded the log. Nested creator/responsible objects are left to dlt flatten.
+- **Bitrix24:** drop experimental `columns` hints. They collided with dlt's
+  snake_case normalization against an already-evolved pipeline schema
+  (`backlogId`→`backlog_id`, etc.) and flooded logs without materializing
+  null fields. Null-field type-inference WARNINGs are expected and harmless
+  when the portal leaves those fields empty.
 
 ## 0.1.1 — 2026-09-27
 

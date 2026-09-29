@@ -11,8 +11,6 @@ from chumoli.connectors import register_builtin_connectors
 from chumoli.connectors.base import registry
 from chumoli.connectors.bitrix24.connector import (
     BITRIX_PAGE_SIZE,
-    RESOURCE_COLUMNS,
-    RESOURCES,
     _paginate,
     extract_items,
     is_webhook_url,
@@ -92,52 +90,6 @@ def test_build_dlt_source_no_network() -> None:
     )
     assert src is not None
 
-
-def test_resource_columns_use_raw_api_keys() -> None:
-    """Hint kalitlari Bitrix JSON asl nomlari — snake_case emas (collision oldini olish)."""
-    assert set(RESOURCE_COLUMNS) == set(RESOURCES)
-    deals = RESOURCE_COLUMNS["deals"]
-    for col in (
-        "ADDITIONAL_INFO",
-        "LAST_COMMUNICATION_TIME",
-        "LOCATION_ID",
-        "ORIGIN_ID",
-        "ORIGINATOR_ID",
-        "PROBABILITY",
-        "QUOTE_ID",
-        "REPEAT_SALE_SEGMENT_ID",
-        "SOURCE_DESCRIPTION",
-        "UTM_CAMPAIGN",
-        "UTM_SOURCE",
-    ):
-        assert col in deals, col
-    assert deals["ID"].get("nullable") is False
-
-    contacts = RESOURCE_COLUMNS["contacts"]
-    for col in ("ADDRESS", "ADDRESS_CITY", "HONORIFIC", "PHOTO", "POST", "SECOND_NAME"):
-        assert col in contacts, col
-
-    leads = RESOURCE_COLUMNS["leads"]
-    for col in ("COMPANY_ID", "COMPANY_TITLE", "STATUS_DESCRIPTION", "ADDRESS"):
-        assert col in leads, col
-
-    # tasks.task.list — camelCase; nested responsible/creator hint yo'q
-    tasks = RESOURCE_COLUMNS["tasks"]
-    for col in (
-        "backlogId",
-        "closedBy",
-        "closedDate",
-        "parentId",
-        "flowId",
-        "sprintId",
-        "timeSpentInLogs",
-        "viewedDate",
-        "durationFact",
-    ):
-        assert col in tasks, col
-    assert "responsible__work_position" not in tasks
-    assert "creator__work_position" not in tasks
-    assert tasks["id"].get("nullable") is False
 
 
 def test_portal_without_oauth_raises() -> None:
