@@ -50,10 +50,12 @@ RESOURCES: dict[str, tuple[str, str | None, str]] = {
     "tasks": ("tasks.task.list", "tasks", "CHANGED_DATE"),
 }
 
+# dlt incremental primary_key ni snake_case qiladi (ID→id) va raw JSON dan
+# shu nom bilan qidiradi. CRM javobida faqat "ID" bor — yield da "id" alias beriladi.
 RESOURCE_PRIMARY_KEY: dict[str, str] = {
-    "deals": "ID",
-    "leads": "ID",
-    "contacts": "ID",
+    "deals": "id",
+    "leads": "id",
+    "contacts": "id",
     "tasks": "id",
 }
 
@@ -266,7 +268,11 @@ def _make_resource(
             "User-Agent": f"Chumoli/{__version__} (+https://github.com/farrux05-ai/chumoli)",
         }
         with httpx.Client(timeout=60.0, headers=headers) as client:
-            yield from _paginate(client, url, body, nested_key)
+            for item in _paginate(client, url, body, nested_key):
+                # CRM: {"ID": "2", ...} — incremental PK "id" talab qiladi
+                if "ID" in item and "id" not in item:
+                    item = {**item, "id": item["ID"]}
+                yield item
 
     return _resource
 

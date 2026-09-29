@@ -12,6 +12,7 @@ from chumoli.connectors.base import registry
 from chumoli.connectors.bitrix24.connector import (
     BITRIX_PAGE_SIZE,
     RESOURCE_CURSOR_FIELD,
+    RESOURCE_PRIMARY_KEY,
     RESOURCES,
     _paginate,
     extract_items,
@@ -91,6 +92,12 @@ def test_build_dlt_source_no_network() -> None:
         {"webhook_url": "https://shop.bitrix24.uz/rest/1/xxxxx/"},
     )
     assert src is not None
+
+
+def test_crm_pk_is_lowercase_id() -> None:
+    """Incremental PK must be 'id' (CRM JSON has ID; alias injected on yield)."""
+    assert RESOURCE_PRIMARY_KEY["deals"] == "id"
+    assert RESOURCE_PRIMARY_KEY["tasks"] == "id"
 
 
 def test_cursor_fields_match_api_json() -> None:

@@ -9,6 +9,8 @@
   pipeline state. Still `merge` on ID.
 
 ### Fixed
+- **Bitrix24:** inject `id` from CRM `ID` on yield so dlt incremental
+  does not raise `IncrementalPrimaryKeyMissing` (looks up snake_case `id`).
 - **Bitrix24:** drop experimental `columns` hints. They collided with dlt's
   snake_case normalization against an already-evolved pipeline schema
   (`backlogId`→`backlog_id`, etc.) and flooded logs without materializing
@@ -38,6 +40,8 @@
   avoids a connect/auth round-trip per check on remote destinations.
 
 ### Fixed
+- **Bitrix24:** inject `id` from CRM `ID` on yield so dlt incremental
+  does not raise `IncrementalPrimaryKeyMissing` (looks up snake_case `id`).
 - **`drop-resource` was a silent no-op for DuckDB:** the dlt CLI ran as a
   separate process without the destination credentials, so it opened a stray
   empty `<cwd>/<pipeline>.duckdb`, "dropped" there and reported success while the
@@ -86,6 +90,8 @@
 - CI: pytest 3.11/3.12 + Docker smoke
 
 ### Fixed
+- **Bitrix24:** inject `id` from CRM `ID` on yield so dlt incremental
+  does not raise `IncrementalPrimaryKeyMissing` (looks up snake_case `id`).
 - Click connector auth raised `NameError` (`time` not imported) — connector was unusable
 - Filesystem export silently failed: `Path` was undefined in `_execute` and the
   error was swallowed by `except Exception`
