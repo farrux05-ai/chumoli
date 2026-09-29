@@ -39,20 +39,34 @@ def configure_logging() -> None:
         force=True,
     )
 
-    # dlt + pyarrow: nullable/precision hints vs Arrow schema farqi —
-    # load ishlayveradi, lekin har batch da WARNING shovqin chiqaradi.
-    # See dlt-hub/dlt#2788, #3581. INFO da to'liq log qoladi.
-    class _DltArrowSchemaHintNoiseFilter(logging.Filter):
+    # dlt shovqin filtri — load muvaffaqiyatli, lekin logni iflos qiladi:
+    # 1) pyarrow schema merge (dlt-hub/dlt#2788, #3581)
+    # 2) null-only columns type infer (portal maydoni bo'sh — kutilgan)
+    # 3) identifier collision (schema evolve + normalize)
+    # INFO darajasida haqiqiy xatolar saqlanadi.
+    class _DltNoiseFilter(logging.Filter):
         def filter(self, record: logging.LogRecord) -> bool:
             msg = record.getMessage()
             if "when merging arrow schema with dlt schema" in msg:
                 return False
             if "arrow schema and data were unmodified" in msg:
                 return False
+            if "could not have their types inferred" in msg:
+                return False
+            if "did not receive any data during this load" in msg:
+                return False
+            if "collides with other column" in msg:
+                return False
             return True
 
-    for name in ("dlt", "dlt.extract", "dlt.extract.extractors"):
-        logging.getLogger(name).addFilter(_DltArrowSchemaHintNoiseFilter())
+    for name in (
+        "dlt",
+        "dlt.extract",
+        "dlt.extract.extractors",
+        "dlt.normalize",
+        "dlt.normalize.validate",
+    ):
+        logging.getLogger(name).addFilter(_DltNoiseFilter())
 
     shared_processors: list[Any] = [
         structlog.contextvars.merge_contextvars,

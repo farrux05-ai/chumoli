@@ -6,8 +6,10 @@
 - **Bitrix24:** drop experimental `columns` hints. They collided with dlt's
   snake_case normalization against an already-evolved pipeline schema
   (`backlogId`→`backlog_id`, etc.) and flooded logs without materializing
-  null fields. Null-field type-inference WARNINGs are expected and harmless
-  when the portal leaves those fields empty.
+  null fields.
+- **Logging:** suppress expected dlt WARNINGs for null-only columns (type
+  inference when the portal leaves fields empty) and identifier collisions —
+  same noise-filter pattern already used for pyarrow schema-merge messages.
 
 ## 0.1.1 — 2026-09-27
 
