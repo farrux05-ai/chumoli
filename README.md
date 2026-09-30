@@ -148,6 +148,13 @@ PYTHONPATH=src python -m pytest tests/ -q
 
 CI (GitHub Actions): har push/PR da Python 3.11 va 3.12 da testlar + Docker image build.
 
+## Loyihani qo‘llab-quvvatlash
+
+Chumoli ochiq manba. Agar foydali bo‘lsa, rivojiga kichik hissa qo‘shishingiz mumkin.
+
+**Karta:** `9860 0121 0661 4899`  
+Valijonov Farrux
+
 ## Litsenziya
 
 Apache-2.0 · [GitHub](https://github.com/farrux05-ai/chumoli)
